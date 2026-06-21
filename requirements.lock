@@ -1,0 +1,8 @@
+# Generated from pyproject.toml for the CBPE v1.0 reproduction environment.
+matplotlib==3.10.8
+numpy==2.4.2
+ortools==9.15.6755
+pandas==3.0.1
+PyYAML==6.0.3
+pytest==9.0.2
+

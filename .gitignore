@@ -1,0 +1,29 @@
+# Python and tools
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated and bulky artifacts
+results/runs/
+results/release/
+results/**/*.log
+src/run/results/
+experiments/
+figures/
+exportToHTML/
+outputs/
+work/
+*.zip
+
+# Canonical paper artifacts remain versioned through explicit exceptions
+!results/paper/
+!results/paper/**
+

@@ -1,0 +1,3 @@
+configuration,non_dominated_solutions,minimum_lcoe_usd_kwh,minimum_grid_peak_kw,grid_dependency_at_minimum_peak_percent
+PV + BSV,2,0.1339113811206935,468.24760011410217,66.50403721513824
+PV + BSV + H2,47,0.1415178731510888,351.2476001141024,44.401683897656206

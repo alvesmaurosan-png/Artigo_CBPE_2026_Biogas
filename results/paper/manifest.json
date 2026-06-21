@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-06-21T19:00:15.502744+00:00",
+  "profile": "smoke",
+  "git_commit": "8dcf5eb80c3eda8e19d29ec68d555dfeb493d269",
+  "seed": 42,
+  "method": {
+    "pareto_dispatch": "sequential 24-hour MILPs with storage-state continuity",
+    "feasibility": "integrated sizing and dispatch MILP"
+  },
+  "environment": {
+    "python": "3.13.7",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "dependencies": {
+      "numpy": "2.4.2",
+      "pandas": "3.0.1",
+      "matplotlib": "3.10.8",
+      "ortools": "9.15.6755",
+      "PyYAML": "6.0.3"
+    }
+  },
+  "dataset": {
+    "path": "data/processed/fleet_demand_sp.csv",
+    "rows": 8760,
+    "sha256": "63f8dc5da02d8d8282d457310a6ff233658559cf2a3cb6f28834d0b3853ffef0",
+    "demand_min_kw": 63.90736296906629,
+    "demand_max_kw": 474.8149521321564,
+    "pv_factor_min": 0.0,
+    "pv_factor_max": 1.0
+  },
+  "runs": [
+    {
+      "scenario": "pv_bsv_1500",
+      "stage": "integrated_feasibility",
+      "status": "OPTIMAL",
+      "objective_peak_kw": 379.9019342598917,
+      "best_bound_kw": 379.9019342598917,
+      "relative_gap": 0.0,
+      "solve_time_seconds": 0.10818739992100745,
+      "horizon_hours": 48,
+      "capacities": {
+        "pv_kw": 1200.0,
+        "bsv_kwh": 1500.0,
+        "electrolyzer_kw": -0.0,
+        "h2_tank_kg": -0.0,
+        "fuelcell_kw": -0.0
+      }
+    },
+    {
+      "scenario": "pv_bsv_h2_1500",
+      "stage": "integrated_feasibility",
+      "status": "OPTIMAL",
+      "objective_peak_kw": 198.25054306073895,
+      "best_bound_kw": 198.25054306073895,
+      "relative_gap": 0.0,
+      "solve_time_seconds": 0.3228516000090167,
+      "horizon_hours": 48,
+      "capacities": {
+        "pv_kw": 1200.0,
+        "bsv_kwh": 1500.0000000000002,
+        "electrolyzer_kw": 500.0,
+        "h2_tank_kg": 144.77009063030107,
+        "fuelcell_kw": 500.0
+      }
+    }
+  ],
+  "duration_seconds": 2.9625048999441788,
+  "outputs": [
+    {
+      "path": "results/paper/figures/figure_1_observed_power_minima.png",
+      "sha256": "7a8ffc8309e791cfc35e2373ecd15c77cf377656e9cc60876f084cb7d591e64e",
+      "bytes": 69246
+    },
+    {
+      "path": "results/paper/figures/figure_2_operational_profile.png",
+      "sha256": "f9530f359e6e580c9617ff9d09e678e2745656c01d354f453e5b27c3efe42e12",
+      "bytes": 162565
+    },
+    {
+      "path": "results/paper/figures/figure_3_energy_contributions.png",
+      "sha256": "e8b5ada3af05c9e76b7454dcfc90bea017284fa12a6f743397184ee6282b86af",
+      "bytes": 42951
+    },
+    {
+      "path": "results/paper/figures/figure_4_pareto_constraints.png",
+      "sha256": "823fe088faef7090fb325eec0dce542089852d9ae2ca0e409289d2a7f5cb4f2f",
+      "bytes": 94621
+    },
+    {
+      "path": "results/paper/tables/feasibility_smoke.json",
+      "sha256": "f1247c330e76159076f2da63459c090a9e6c602643dca5463899cfa1588a6dcb",
+      "bytes": 955
+    },
+    {
+      "path": "results/paper/tables/table_2_hydrogen_effect.csv",
+      "sha256": "604a7d9ff92a58682730ac7ba57a99d180b06ee660cc69e43d11b671dad6bf76",
+      "bytes": 263
+    }
+  ]
+}

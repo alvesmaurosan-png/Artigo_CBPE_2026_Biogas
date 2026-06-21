@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cbpe-energy-planning"
+version = "1.0.0"
+description = "Auditable reproduction package for electric bus depot energy planning"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = {text = "MIT"}
+dependencies = [
+  "matplotlib==3.10.8",
+  "numpy==2.4.2",
+  "ortools==9.15.6755",
+  "pandas==3.0.1",
+  "PyYAML==6.0.3",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.0.2"]
+
+[project.scripts]
+cbpe = "cbpe.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cbpe*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
