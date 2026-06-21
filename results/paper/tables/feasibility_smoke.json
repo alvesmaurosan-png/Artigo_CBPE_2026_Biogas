@@ -6,7 +6,7 @@
     "objective_peak_kw": 379.9019342598917,
     "best_bound_kw": 379.9019342598917,
     "relative_gap": 0.0,
-    "solve_time_seconds": 0.10818739992100745,
+    "solve_time_seconds": 0.12499060004483908,
     "horizon_hours": 48,
     "capacities": {
       "pv_kw": 1200.0,
@@ -23,7 +23,7 @@
     "objective_peak_kw": 198.25054306073895,
     "best_bound_kw": 198.25054306073895,
     "relative_gap": 0.0,
-    "solve_time_seconds": 0.3228516000090167,
+    "solve_time_seconds": 0.2121384999481961,
     "horizon_hours": 48,
     "capacities": {
       "pv_kw": 1200.0,

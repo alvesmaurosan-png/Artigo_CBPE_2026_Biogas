@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "created_at_utc": "2026-06-21T19:00:15.502744+00:00",
+  "created_at_utc": "2026-06-21T19:09:10.773056+00:00",
   "profile": "smoke",
-  "git_commit": "8dcf5eb80c3eda8e19d29ec68d555dfeb493d269",
+  "git_commit": "cd9391d1ea1e4611da9de30b3058defe871b4401",
   "seed": 42,
   "method": {
     "pareto_dispatch": "sequential 24-hour MILPs with storage-state continuity",
@@ -28,6 +28,83 @@
     "pv_factor_min": 0.0,
     "pv_factor_max": 1.0
   },
+  "inputs": [
+    {
+      "path": "configs/paper/base.yaml",
+      "sha256": "26ae20994e1f4b192dbb4e4d40b3e1309904f6e0ad53c62210398c19c08453fa",
+      "bytes": 3273
+    },
+    {
+      "path": "configs/paper/pv_bsv_1500.yaml",
+      "sha256": "02b2add1da8b54b16d30f3850ff68d6f6aec4f5aad7f618d653da5efad264121",
+      "bytes": 3229
+    },
+    {
+      "path": "configs/paper/pv_bsv_3000.yaml",
+      "sha256": "d2a939052d80f6f78ec2924c586c05660d021941e539bcb76d06e2dfcccdf621",
+      "bytes": 3229
+    },
+    {
+      "path": "configs/paper/pv_bsv_6000.yaml",
+      "sha256": "9c1b1c589f989f288dfccb918cad1d5e6b2d18210c4c30267b0b438e047ef5ed",
+      "bytes": 3231
+    },
+    {
+      "path": "configs/paper/pv_bsv_h2_1500.yaml",
+      "sha256": "81592b48ab2306fb464bcc456878631c32325fbeee5a3c10731082e038bcca7a",
+      "bytes": 3243
+    },
+    {
+      "path": "results/paper/source_data/annual_vs_peak.csv",
+      "sha256": "148af1b1b156f5bbf6b967e515ef15be70468633c448aa142e327225b4adbb18",
+      "bytes": 156
+    },
+    {
+      "path": "results/paper/source_data/master_summary.csv",
+      "sha256": "52465e65cb9472348c80e534262bbb2358a99ab2a8f3977a81714d18c3769c87",
+      "bytes": 2093
+    },
+    {
+      "path": "results/paper/source_data/pareto_constraints_summary.csv",
+      "sha256": "97807c8062d05b32dbbbb02046ed92f7c34b9e9ca1a9b7d86d36bdbb75d9de2c",
+      "bytes": 570
+    },
+    {
+      "path": "results/paper/source_data/pareto_points.csv",
+      "sha256": "75c94af8bf2e7addac1395be2890b65310dc89c52881168234731e5fb087cd9b",
+      "bytes": 34762
+    },
+    {
+      "path": "results/paper/source_data/pareto_pv_bsv_1500.csv",
+      "sha256": "def6a959a8a36ae7d2d2bad9db3507db3f07a944d63524935406b3b7ef223133",
+      "bytes": 1430
+    },
+    {
+      "path": "results/paper/source_data/pareto_pv_bsv_3000.csv",
+      "sha256": "f1597182d34910dada32b195e4b5ebb9b3acd612baddf88f2585453388fe2219",
+      "bytes": 1450
+    },
+    {
+      "path": "results/paper/source_data/pareto_pv_bsv_6000.csv",
+      "sha256": "2b4186439a530ab195da60838e411dc5cb99ed56fdba86ecf1bd1628175932bb",
+      "bytes": 21597
+    },
+    {
+      "path": "results/paper/source_data/pareto_pv_bsv_h2_1500.csv",
+      "sha256": "d08dffcbf4c3937039a481053818ff0057bd6f5aa3edc855607073d1b433e8e8",
+      "bytes": 22014
+    },
+    {
+      "path": "results/paper/source_data/peak_contribution.csv",
+      "sha256": "614244eb60800210a2d10189483f6ac48fbf2d8dd56d5d5c484ae17e073c1821",
+      "bytes": 161
+    },
+    {
+      "path": "results/paper/source_data/weekly_typical_dispatch.csv",
+      "sha256": "433faaac393396c6eed671f103f87f728c1b6b4d18a61b17f53b665fa96c9ee7",
+      "bytes": 23254
+    }
+  ],
   "runs": [
     {
       "scenario": "pv_bsv_1500",
@@ -36,7 +113,7 @@
       "objective_peak_kw": 379.9019342598917,
       "best_bound_kw": 379.9019342598917,
       "relative_gap": 0.0,
-      "solve_time_seconds": 0.10818739992100745,
+      "solve_time_seconds": 0.12499060004483908,
       "horizon_hours": 48,
       "capacities": {
         "pv_kw": 1200.0,
@@ -53,7 +130,7 @@
       "objective_peak_kw": 198.25054306073895,
       "best_bound_kw": 198.25054306073895,
       "relative_gap": 0.0,
-      "solve_time_seconds": 0.3228516000090167,
+      "solve_time_seconds": 0.2121384999481961,
       "horizon_hours": 48,
       "capacities": {
         "pv_kw": 1200.0,
@@ -64,7 +141,7 @@
       }
     }
   ],
-  "duration_seconds": 2.9625048999441788,
+  "duration_seconds": 2.5888506000628695,
   "outputs": [
     {
       "path": "results/paper/figures/figure_1_observed_power_minima.png",
@@ -87,8 +164,13 @@
       "bytes": 94621
     },
     {
+      "path": "results/paper/tables/feasibility_annual.json",
+      "sha256": "1460ff0c94609641d3c59cb2395ee08a9d0cdb77ee42c2f6d8f7e77ac438c434",
+      "bytes": 849
+    },
+    {
       "path": "results/paper/tables/feasibility_smoke.json",
-      "sha256": "f1247c330e76159076f2da63459c090a9e6c602643dca5463899cfa1588a6dcb",
+      "sha256": "edddf568ac3b5ca66bbfaf1bfe275a4d2454855401ad7a45e18ee67d282bafcc",
       "bytes": 955
     },
     {
