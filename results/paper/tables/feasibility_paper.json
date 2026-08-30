@@ -3,11 +3,11 @@
     "scenario": "pv_bsv_1500",
     "stage": "integrated_feasibility",
     "status": "OPTIMAL",
-    "objective_peak_kw": 379.9019342598917,
-    "best_bound_kw": 379.9019342598917,
+    "objective_peak_kw": 379.9019342598916,
+    "best_bound_kw": 379.9019342598916,
     "relative_gap": 0.0,
-    "solve_time_seconds": 0.15007510036230087,
-    "horizon_hours": 48,
+    "solve_time_seconds": 81.63516440056264,
+    "horizon_hours": 8760,
     "capacities": {
       "pv_kw": 1200.0,
       "bsv_kwh": 1500.0,
@@ -19,17 +19,17 @@
   {
     "scenario": "pv_bsv_h2_1500",
     "stage": "integrated_feasibility",
-    "status": "OPTIMAL",
-    "objective_peak_kw": 198.25054306073895,
-    "best_bound_kw": 198.25054306073895,
-    "relative_gap": 0.0,
-    "solve_time_seconds": 0.110805400647223,
-    "horizon_hours": 48,
+    "status": "TIME_LIMIT",
+    "objective_peak_kw": 474.8149521321564,
+    "best_bound_kw": 0.0,
+    "relative_gap": 1.0,
+    "solve_time_seconds": 89.55235209967941,
+    "horizon_hours": 8760,
     "capacities": {
       "pv_kw": 1200.0,
-      "bsv_kwh": 1500.0000000000002,
+      "bsv_kwh": 0.0,
       "electrolyzer_kw": 500.0,
-      "h2_tank_kg": 144.77009063030107,
+      "h2_tank_kg": 0.0,
       "fuelcell_kw": 500.0
     }
   }

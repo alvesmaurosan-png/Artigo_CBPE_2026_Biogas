@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "created_at_utc": "2026-06-21T19:09:10.773056+00:00",
-  "profile": "smoke",
-  "git_commit": "cd9391d1ea1e4611da9de30b3058defe871b4401",
+  "created_at_utc": "2026-08-30T08:59:14.265979+00:00",
+  "profile": "paper",
+  "git_commit": "c53af457379269b99d37969afc036acafd6ec1cc",
   "seed": 42,
   "method": {
     "pareto_dispatch": "sequential 24-hour MILPs with storage-state continuity",
@@ -76,23 +76,23 @@
     },
     {
       "path": "results/paper/source_data/pareto_pv_bsv_1500.csv",
-      "sha256": "def6a959a8a36ae7d2d2bad9db3507db3f07a944d63524935406b3b7ef223133",
+      "sha256": "501b311f538463ccf48a1d10af17e082001a1e0414a29296a633d0469e05c83a",
       "bytes": 1430
     },
     {
       "path": "results/paper/source_data/pareto_pv_bsv_3000.csv",
-      "sha256": "f1597182d34910dada32b195e4b5ebb9b3acd612baddf88f2585453388fe2219",
-      "bytes": 1450
+      "sha256": "0f725edc41a4e20032ed25bb5317e023c4a6d15de478bdd35e7559039870fcdc",
+      "bytes": 1440
     },
     {
       "path": "results/paper/source_data/pareto_pv_bsv_6000.csv",
-      "sha256": "2b4186439a530ab195da60838e411dc5cb99ed56fdba86ecf1bd1628175932bb",
-      "bytes": 21597
+      "sha256": "90d1394a2a5cda366e121a50524eb250763476054bfcc91dbd6ca46d5ccb4f91",
+      "bytes": 21613
     },
     {
       "path": "results/paper/source_data/pareto_pv_bsv_h2_1500.csv",
-      "sha256": "d08dffcbf4c3937039a481053818ff0057bd6f5aa3edc855607073d1b433e8e8",
-      "bytes": 22014
+      "sha256": "81bca1c9be077d4e587ed6b7aadbec2ec68e43db40db4310adb4f3259593d926",
+      "bytes": 22042
     },
     {
       "path": "results/paper/source_data/peak_contribution.csv",
@@ -107,14 +107,42 @@
   ],
   "runs": [
     {
+      "scenario": "pv_bsv_6000",
+      "stage": "nsga2",
+      "returncode": 0,
+      "duration_seconds": 21195.00703459978,
+      "status": "COMPLETE"
+    },
+    {
+      "scenario": "pv_bsv_3000",
+      "stage": "nsga2",
+      "returncode": 0,
+      "duration_seconds": 14828.959259900264,
+      "status": "COMPLETE"
+    },
+    {
+      "scenario": "pv_bsv_1500",
+      "stage": "nsga2",
+      "returncode": 0,
+      "duration_seconds": 8033.038250800222,
+      "status": "COMPLETE"
+    },
+    {
+      "scenario": "pv_bsv_h2_1500",
+      "stage": "nsga2",
+      "returncode": 0,
+      "duration_seconds": 20059.395841199905,
+      "status": "COMPLETE"
+    },
+    {
       "scenario": "pv_bsv_1500",
       "stage": "integrated_feasibility",
       "status": "OPTIMAL",
-      "objective_peak_kw": 379.9019342598917,
-      "best_bound_kw": 379.9019342598917,
+      "objective_peak_kw": 379.9019342598916,
+      "best_bound_kw": 379.9019342598916,
       "relative_gap": 0.0,
-      "solve_time_seconds": 0.12499060004483908,
-      "horizon_hours": 48,
+      "solve_time_seconds": 81.63516440056264,
+      "horizon_hours": 8760,
       "capacities": {
         "pv_kw": 1200.0,
         "bsv_kwh": 1500.0,
@@ -126,22 +154,22 @@
     {
       "scenario": "pv_bsv_h2_1500",
       "stage": "integrated_feasibility",
-      "status": "OPTIMAL",
-      "objective_peak_kw": 198.25054306073895,
-      "best_bound_kw": 198.25054306073895,
-      "relative_gap": 0.0,
-      "solve_time_seconds": 0.2121384999481961,
-      "horizon_hours": 48,
+      "status": "TIME_LIMIT",
+      "objective_peak_kw": 474.8149521321564,
+      "best_bound_kw": 0.0,
+      "relative_gap": 1.0,
+      "solve_time_seconds": 89.55235209967941,
+      "horizon_hours": 8760,
       "capacities": {
         "pv_kw": 1200.0,
-        "bsv_kwh": 1500.0000000000002,
+        "bsv_kwh": 0.0,
         "electrolyzer_kw": 500.0,
-        "h2_tank_kg": 144.77009063030107,
+        "h2_tank_kg": 0.0,
         "fuelcell_kw": 500.0
       }
     }
   ],
-  "duration_seconds": 2.5888506000628695,
+  "duration_seconds": 64297.8691552002,
   "outputs": [
     {
       "path": "results/paper/figures/figure_1_observed_power_minima.png",
@@ -165,13 +193,13 @@
     },
     {
       "path": "results/paper/tables/feasibility_annual.json",
-      "sha256": "1460ff0c94609641d3c59cb2395ee08a9d0cdb77ee42c2f6d8f7e77ac438c434",
-      "bytes": 849
+      "sha256": "4f21146ea2842610808ec111294c4ba3d201577f19931c4a21e1ae7a2ada7ab0",
+      "bytes": 851
     },
     {
-      "path": "results/paper/tables/feasibility_smoke.json",
-      "sha256": "edddf568ac3b5ca66bbfaf1bfe275a4d2454855401ad7a45e18ee67d282bafcc",
-      "bytes": 955
+      "path": "results/paper/tables/feasibility_paper.json",
+      "sha256": "90c8e4d7097bd1752b5fed1c6c1bbccee897c894a9348b1ba6e307ae977ca281",
+      "bytes": 913
     },
     {
       "path": "results/paper/tables/table_2_hydrogen_effect.csv",
