@@ -32,7 +32,7 @@ def capital_recovery_factor(wacc: float, n: int) -> float:
     if wacc == 0:
         return 1.0 / n
 
-    return (wacc * (1 + wacc) * n) / ((1 + wacc) * n - 1)
+    return (wacc * (1 + wacc) ** n) / ((1 + wacc) ** n - 1)
 
 
 # ------------------------------------------------------------
