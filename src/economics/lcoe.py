@@ -46,38 +46,163 @@ def _bsv_total(cfg: Dict[str, float]) -> float:
     )
 
 
-def compute_capex_total(cap: Dict[str, float], cfg: Dict[str, float]) -> float:
-    return float(
+
+def compute_capex_total(
+    cap: Dict[str, float],
+    cfg: Dict[str, float],
+) -> float:
+
+    common = (
         cap["pv_kw"] * cfg["pv_usd_per_kw"]
         + cap["bsv_kwh"] * _bsv_total(cfg)
-        + cap["electrolyzer_kw"] * cfg["electrolyzer_usd_per_kw"]
-        + cap["h2_tank_kg"] * cfg["h2_tank_usd_per_kg"]
-        + cap["fuelcell_kw"] * cfg["fuelcell_usd_per_kw"]
     )
 
+    if (
+        "electrolyzer_kw" in cap
+        or "h2_tank_kg" in cap
+        or "fuelcell_kw" in cap
+    ):
+        dispatchable = (
+            cap.get("electrolyzer_kw", 0.0)
+            * cfg.get("electrolyzer_usd_per_kw", 0.0)
+            + cap.get("h2_tank_kg", 0.0)
+            * cfg.get("h2_tank_usd_per_kg", 0.0)
+            + cap.get("fuelcell_kw", 0.0)
+            * cfg.get("fuelcell_usd_per_kw", 0.0)
+        )
 
-def compute_fixed_opex_annual(cap: Dict[str, float], eco: Dict[str, Any]) -> float:
+    elif (
+        "biomethane_storage_nm3" in cap
+        or "chp_kw" in cap
+    ):
+        dispatchable = (
+            cap.get("biomethane_storage_nm3", 0.0)
+            * cfg.get(
+                "biomethane_storage_usd_per_nm3",
+                0.0,
+            )
+            + cap.get("chp_kw", 0.0)
+            * cfg.get("chp_usd_per_kw", 0.0)
+        )
+
+    else:
+        dispatchable = 0.0
+
+    return float(common + dispatchable)
+
+
+
+def compute_fixed_opex_annual(
+    cap: Dict[str, float],
+    eco: Dict[str, Any],
+) -> float:
+
     capex_cfg = eco["capex"]
     frac = eco["opex_fixed"]
 
-    pv = cap["pv_kw"] * capex_cfg["pv_usd_per_kw"]
-    bsv = cap["bsv_kwh"] * _bsv_total(capex_cfg)
-    elz = cap["electrolyzer_kw"] * capex_cfg["electrolyzer_usd_per_kw"]
-    fc = cap["fuelcell_kw"] * capex_cfg["fuelcell_usd_per_kw"]
-    tank = cap["h2_tank_kg"] * capex_cfg["h2_tank_usd_per_kg"]
-
-    return float(
-        pv * frac["pv_fraction_of_capex_per_year"]
-        + bsv * frac["bsv_fraction_of_capex_per_year"]
-        + elz * frac["electrolyzer_fraction_of_capex_per_year"]
-        + fc * frac["fuelcell_fraction_of_capex_per_year"]
-        + tank * frac["h2_tank_fraction_of_capex_per_year"]
+    pv = (
+        cap["pv_kw"]
+        * capex_cfg["pv_usd_per_kw"]
     )
 
+    bsv = (
+        cap["bsv_kwh"]
+        * _bsv_total(capex_cfg)
+    )
 
-# ------------------------------------------------------------
-# GRID
-# ------------------------------------------------------------
+    common = (
+        pv
+        * frac["pv_fraction_of_capex_per_year"]
+        + bsv
+        * frac["bsv_fraction_of_capex_per_year"]
+    )
+
+    if (
+        "electrolyzer_kw" in cap
+        or "h2_tank_kg" in cap
+        or "fuelcell_kw" in cap
+    ):
+        elz = (
+            cap.get("electrolyzer_kw", 0.0)
+            * capex_cfg.get(
+                "electrolyzer_usd_per_kw",
+                0.0,
+            )
+        )
+
+        fc = (
+            cap.get("fuelcell_kw", 0.0)
+            * capex_cfg.get(
+                "fuelcell_usd_per_kw",
+                0.0,
+            )
+        )
+
+        tank = (
+            cap.get("h2_tank_kg", 0.0)
+            * capex_cfg.get(
+                "h2_tank_usd_per_kg",
+                0.0,
+            )
+        )
+
+        dispatchable = (
+            elz
+            * frac.get(
+                "electrolyzer_fraction_of_capex_per_year",
+                0.0,
+            )
+            + fc
+            * frac.get(
+                "fuelcell_fraction_of_capex_per_year",
+                0.0,
+            )
+            + tank
+            * frac.get(
+                "h2_tank_fraction_of_capex_per_year",
+                0.0,
+            )
+        )
+
+    elif (
+        "biomethane_storage_nm3" in cap
+        or "chp_kw" in cap
+    ):
+        storage = (
+            cap.get("biomethane_storage_nm3", 0.0)
+            * capex_cfg.get(
+                "biomethane_storage_usd_per_nm3",
+                0.0,
+            )
+        )
+
+        chp = (
+            cap.get("chp_kw", 0.0)
+            * capex_cfg.get(
+                "chp_usd_per_kw",
+                0.0,
+            )
+        )
+
+        dispatchable = (
+            storage
+            * frac.get(
+                "biomethane_storage_fraction_of_capex_per_year",
+                0.0,
+            )
+            + chp
+            * frac.get(
+                "chp_fraction_of_capex_per_year",
+                0.0,
+            )
+        )
+
+    else:
+        dispatchable = 0.0
+
+    return float(common + dispatchable)
+
+
 def _build_hour(df: pd.DataFrame) -> pd.Series:
     return df["hour"].astype(int) % 24
 
@@ -163,13 +288,75 @@ def compute_variable_h2_opex_annual(
 # ------------------------------------------------------------
 # LCOE
 # ------------------------------------------------------------
+
+def compute_variable_biomethane_opex_annual(
+    df: pd.DataFrame,
+    eco: Dict[str, Any],
+    dt: float,
+) -> dict[str, float]:
+
+    cfg = eco.get(
+        "opex_variable_biomethane",
+        {},
+    )
+
+    biomethane_price = float(
+        cfg.get(
+            "biomethane_usd_per_nm3",
+            0.0,
+        )
+    )
+
+    chp_variable_cost = float(
+        cfg.get(
+            "chp_usd_per_kwh",
+            0.0,
+        )
+    )
+
+    biomethane_fuel = 0.0
+    chp_variable = 0.0
+
+    if "biomethane_use_nm3" in df:
+        biomethane_fuel = float(
+            (
+                _sanitize(
+                    df["biomethane_use_nm3"],
+                    "biomethane_use",
+                )
+                * biomethane_price
+            ).sum()
+        )
+
+    if "p_chp_kw" in df:
+        chp_variable = float(
+            (
+                _sanitize(
+                    df["p_chp_kw"],
+                    "p_chp",
+                )
+                * dt
+                * chp_variable_cost
+            ).sum()
+        )
+
+    return {
+        "biomethane_fuel_opex_annual_usd":
+            biomethane_fuel,
+        "chp_variable_opex_annual_usd":
+            chp_variable,
+        "variable_biomethane_opex_annual_usd":
+            biomethane_fuel + chp_variable,
+    }
+
+
 def compute_lcoe(
     capex: float,
     fixed_opex: float,
     grid_cost: float,
     energy: float,
     crf: float,
-    variable_h2: float = 0.0,
+    variable_dispatchable_opex: float = 0.0,
     degradation: float = 0.0,
 ) -> float:
 
@@ -180,7 +367,7 @@ def compute_lcoe(
         capex * crf
         + fixed_opex
         + grid_cost
-        + variable_h2
+        + variable_dispatchable_opex
         + degradation
     )
 
@@ -200,33 +387,150 @@ def build_economics_summary(
     tariff = config["tariff"]
     dt = float(config["data"].get("timestep_hours", 1.0))
 
+    route = str(
+        config.get("system", {}).get("route", "hydrogen")
+    ).strip().lower()
+
+    if route not in {"hydrogen", "biomethane"}:
+        raise ValueError(
+            f"Unsupported system.route: {route!r}. "
+            "Expected 'hydrogen' or 'biomethane'."
+        )
+
     crf = capital_recovery_factor(
-        eco["wacc_real"], eco["analysis_horizon_years"]
+        eco["wacc_real"],
+        eco["analysis_horizon_years"],
     )
 
-    capex = compute_capex_total(capacities, eco["capex"])
-    fixed = compute_fixed_opex_annual(capacities, eco)
+    # ---------------------------------------------------------
+    # CAPEX / OPEX fixo
+    # ---------------------------------------------------------
+    capex = compute_capex_total(
+        capacities,
+        eco["capex"],
+    )
 
-    grid = compute_grid_opex_annual(dispatch_df, tariff, dt)
-    grid_peak = compute_grid_peak_opex_annual(dispatch_df, tariff, dt)
-    grid_peak_energy = compute_grid_peak_energy_annual(dispatch_df, tariff, dt)
-    grid_total_energy = compute_total_grid_energy_annual(dispatch_df, dt)
+    fixed = compute_fixed_opex_annual(
+        capacities,
+        eco,
+    )
 
-    energy = compute_annual_energy_served(dispatch_df, dt)
+    # ---------------------------------------------------------
+    # Rede
+    # ---------------------------------------------------------
+    grid = compute_grid_opex_annual(
+        dispatch_df,
+        tariff,
+        dt,
+    )
 
-    h2 = compute_variable_h2_opex_annual(dispatch_df, eco, dt)
+    grid_peak = compute_grid_peak_opex_annual(
+        dispatch_df,
+        tariff,
+        dt,
+    )
 
-    lcoe = compute_lcoe(capex, fixed, grid, energy, crf, h2)
+    grid_peak_energy = compute_grid_peak_energy_annual(
+        dispatch_df,
+        tariff,
+        dt,
+    )
+
+    grid_total_energy = compute_total_grid_energy_annual(
+        dispatch_df,
+        dt,
+    )
+
+    # ---------------------------------------------------------
+    # Energia atendida
+    # ---------------------------------------------------------
+    energy = compute_annual_energy_served(
+        dispatch_df,
+        dt,
+    )
+
+    # ---------------------------------------------------------
+    # OPEX variavel da tecnologia despachavel
+    # ---------------------------------------------------------
+    variable_h2 = 0.0
+
+    biomethane_fuel = 0.0
+    chp_variable = 0.0
+    variable_biomethane = 0.0
+
+    if route == "hydrogen":
+        variable_h2 = compute_variable_h2_opex_annual(
+            dispatch_df,
+            eco,
+            dt,
+        )
+
+        variable_dispatchable = variable_h2
+
+    elif route == "biomethane":
+        bm_opex = compute_variable_biomethane_opex_annual(
+            dispatch_df,
+            eco,
+            dt,
+        )
+
+        biomethane_fuel = float(
+            bm_opex["biomethane_fuel_opex_annual_usd"]
+        )
+
+        chp_variable = float(
+            bm_opex["chp_variable_opex_annual_usd"]
+        )
+
+        variable_biomethane = float(
+            bm_opex["variable_biomethane_opex_annual_usd"]
+        )
+
+        variable_dispatchable = variable_biomethane
+
+    # ---------------------------------------------------------
+    # LCOE
+    #
+    # Mesma definicao economica para ambas as rotas:
+    #
+    # annualized CAPEX
+    # + fixed OPEX
+    # + grid OPEX
+    # + variable dispatchable OPEX
+    # --------------------------------
+    # annual energy served
+    # ---------------------------------------------------------
+    lcoe = compute_lcoe(
+        capex,
+        fixed,
+        grid,
+        energy,
+        crf,
+        variable_dispatchable,
+    )
 
     return {
         "capex_total_usd": capex,
         "annualized_capex_usd": capex * crf,
         "fixed_opex_annual_usd": fixed,
+
         "grid_opex_annual_usd": grid,
         "grid_peak_opex_annual_usd": grid_peak,
         "grid_peak_energy_annual_kwh": grid_peak_energy,
         "grid_total_energy_annual_kwh": grid_total_energy,
+
         "energy_served_annual_kwh": energy,
-        "variable_h2_opex_annual_usd": h2,
+
+        # Legacy H2 field preserved for backward compatibility.
+        "variable_h2_opex_annual_usd": variable_h2,
+
+        # Biomethane-specific audit fields.
+        "biomethane_fuel_opex_annual_usd": biomethane_fuel,
+        "chp_variable_opex_annual_usd": chp_variable,
+        "variable_biomethane_opex_annual_usd": variable_biomethane,
+
+        # Route-neutral field for new downstream code.
+        "variable_dispatchable_opex_annual_usd": variable_dispatchable,
+
         "lcoe_usd_kwh": lcoe,
     }
