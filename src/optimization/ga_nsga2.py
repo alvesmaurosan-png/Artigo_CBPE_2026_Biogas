@@ -240,6 +240,77 @@ class NSGA2Optimizer:
 
         return Individual(capacities=self._repair(capacities))
 
+    def _initialize_population(self) -> List[Individual]:
+        warm_cfg = self.config.get("warm_start", {})
+        enabled = bool(warm_cfg.get("enabled", False))
+
+        if not enabled:
+            return [
+                self._random_individual()
+                for _ in range(self.population_size)
+            ]
+
+        seeds = warm_cfg.get("seeds", [])
+
+        if not isinstance(seeds, list):
+            raise ValueError(
+                "warm_start.seeds must be a list"
+            )
+
+        population: List[Individual] = []
+        seen = set()
+
+        for seed in seeds:
+            if len(population) >= self.population_size:
+                break
+
+            if not isinstance(seed, dict):
+                raise ValueError(
+                    "Each warm_start seed must be a mapping"
+                )
+
+            missing = [
+                var
+                for var in self.decision_variables
+                if var not in seed
+            ]
+
+            if missing:
+                raise ValueError(
+                    "Warm-start seed missing variables: "
+                    + ", ".join(missing)
+                )
+
+            capacities = {
+                var: float(seed[var])
+                for var in self.decision_variables
+            }
+
+            capacities = self._repair(capacities)
+            key = self._capacities_key(capacities)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            population.append(
+                Individual(
+                    capacities=capacities,
+                )
+            )
+
+        while len(population) < self.population_size:
+            ind = self._random_individual()
+            key = self._capacities_key(ind.capacities)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            population.append(ind)
+
+        return population
     def _capacities_key(self, capacities: Dict[str, float]) -> Tuple[float, ...]:
         return tuple(round(float(capacities[var]), 6) for var in self.decision_variables)
 
@@ -619,7 +690,7 @@ class NSGA2Optimizer:
     # Loop principal
     # -----------------------------------------------------------------
     def run(self, verbose: bool = True) -> pd.DataFrame:
-        population = [self._random_individual() for _ in range(self.population_size)]
+        population = self._initialize_population()
         for ind in population:
             self.evaluate(ind)
 
