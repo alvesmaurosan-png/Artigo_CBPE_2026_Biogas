@@ -977,17 +977,49 @@ class MILPDispatchOptimizer:
         )
     # ---------------------------------------------------------
 
-    def run_annual_simulation(self, df: pd.DataFrame, period_hours: int = 168) -> DispatchResult:
+    def run_annual_simulation(
+        self,
+        df: pd.DataFrame,
+        period_hours: int = 168,
+    ) -> DispatchResult:
+
         if period_hours <= 0:
             raise ValueError("period_hours must be > 0")
 
-        if "hour" not in df.columns or "demand_kw" not in df.columns or "pv_factor" not in df.columns:
-            raise ValueError("Input df must contain ['hour', 'demand_kw', 'pv_factor']")
+        if (
+            "hour" not in df.columns
+            or "demand_kw" not in df.columns
+            or "pv_factor" not in df.columns
+        ):
+            raise ValueError(
+                "Input df must contain "
+                "['hour', 'demand_kw', 'pv_factor']"
+            )
 
         df = df.copy().reset_index(drop=True)
 
-        bat = self.usable_battery_kwh * self.battery_soc_init_fraction
-        h2 = self.h2_tank_kg * self.h2_soc_init_fraction
+        # -----------------------------------------------------
+        # Estado inicial comum da bateria
+        # -----------------------------------------------------
+        bat = (
+            self.usable_battery_kwh
+            * self.battery_soc_init_fraction
+        )
+
+        # -----------------------------------------------------
+        # Estado inicial da tecnologia despachavel
+        # -----------------------------------------------------
+        if self.route == "hydrogen":
+            dispatchable_state = (
+                self.h2_tank_kg
+                * self.h2_soc_init_fraction
+            )
+
+        elif self.route == "biomethane":
+            dispatchable_state = (
+                self.biomethane_storage_nm3
+                * self.biomethane_soc_init_fraction
+            )
 
         peak = 0.0
         out: list[pd.DataFrame] = []
@@ -998,33 +1030,83 @@ class MILPDispatchOptimizer:
             part = df.iloc[i : i + period_hours].copy()
             part["t_global"] = range(i, i + len(part))
 
-            result = self.solve_period(part, bat, h2, peak)
+            result = self.solve_period(
+                part,
+                bat,
+                dispatchable_state,
+                peak,
+            )
 
             total_solve_time += result.solve_time_sec
 
+            # -------------------------------------------------
+            # Caso inviavel / sem despacho
+            # -------------------------------------------------
             if result.dispatch_df.empty:
+
+                if self.route == "hydrogen":
+                    final_h2_kg = dispatchable_state
+                    final_biomethane_nm3 = 0.0
+                else:
+                    final_h2_kg = 0.0
+                    final_biomethane_nm3 = dispatchable_state
+
                 return DispatchResult(
                     dispatch_df=pd.DataFrame(),
                     final_battery_kwh=bat,
-                    final_h2_kg=h2,
+                    final_h2_kg=final_h2_kg,
                     objective_value=total_objective,
                     solver_status=result.solver_status,
                     solve_time_sec=total_solve_time,
                     milp_gap=None,
+                    final_biomethane_nm3=final_biomethane_nm3,
                 )
 
-            peak = max(peak, float(result.dispatch_df["p_grid_kw"].max()))
+            # -------------------------------------------------
+            # Atualizacao dos estados comuns
+            # -------------------------------------------------
+            peak = max(
+                peak,
+                float(result.dispatch_df["p_grid_kw"].max()),
+            )
+
             bat = result.final_battery_kwh
-            h2 = result.final_h2_kg
+
+            # -------------------------------------------------
+            # Atualizacao do estado despachavel por rota
+            # -------------------------------------------------
+            if self.route == "hydrogen":
+                dispatchable_state = result.final_h2_kg
+
+            elif self.route == "biomethane":
+                dispatchable_state = (
+                    result.final_biomethane_nm3
+                )
+
             total_objective += result.objective_value
             out.append(result.dispatch_df)
 
+        # -----------------------------------------------------
+        # Estado final por rota
+        # -----------------------------------------------------
+        if self.route == "hydrogen":
+            final_h2_kg = dispatchable_state
+            final_biomethane_nm3 = 0.0
+
+        else:
+            final_h2_kg = 0.0
+            final_biomethane_nm3 = dispatchable_state
+
         return DispatchResult(
-            dispatch_df=pd.concat(out, ignore_index=True),
+            dispatch_df=pd.concat(
+                out,
+                ignore_index=True,
+            ),
             final_battery_kwh=bat,
-            final_h2_kg=h2,
+            final_h2_kg=final_h2_kg,
             objective_value=total_objective,
             solver_status="OPTIMAL",
             solve_time_sec=total_solve_time,
             milp_gap=None,
+            final_biomethane_nm3=final_biomethane_nm3,
         )
