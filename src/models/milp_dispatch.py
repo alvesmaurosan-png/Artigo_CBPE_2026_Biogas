@@ -790,8 +790,28 @@ class MILPDispatchOptimizer:
 
             objective.SetCoefficient(v["p_grid"][t], price * dt)
             objective.SetCoefficient(v["p_pv_curtail"][t], self.curtailment_penalty_usd_kwh * dt)
-            objective.SetCoefficient(v["p_elz"][t], self.elz_variable_cost_usd_kwh * dt)
-            objective.SetCoefficient(v["p_fc"][t], self.fc_variable_cost_usd_kwh * dt)
+            if self.route == "hydrogen":
+                objective.SetCoefficient(
+                    v["p_elz"][t],
+                    self.elz_variable_cost_usd_kwh * dt,
+                )
+                objective.SetCoefficient(
+                    v["p_fc"][t],
+                    self.fc_variable_cost_usd_kwh * dt,
+                )
+
+            elif self.route == "biomethane":
+                # Combustivel: USD/Nm3 consumido
+                objective.SetCoefficient(
+                    v["biomethane_use"][t],
+                    self.biomethane_price_usd_nm3,
+                )
+
+                # OPEX variavel do CHP: USD/kWh eletrico gerado
+                objective.SetCoefficient(
+                    v["p_chp"][t],
+                    self.chp_variable_cost_usd_kwh * dt,
+                )
             objective.SetCoefficient(v["p_bat_dis"][t], self.battery_discharge_penalty_usd_kwh * dt)
             objective.SetCoefficient(v["unserved"][t], self.unserved_penalty_usd_kwh * dt)
 
