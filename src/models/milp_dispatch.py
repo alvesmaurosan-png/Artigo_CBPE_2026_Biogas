@@ -16,6 +16,7 @@ class DispatchResult:
     solver_status: str
     solve_time_sec: float
     milp_gap: Optional[float] = None
+    final_biomethane_nm3: float = 0.0
 
 
 class MILPDispatchOptimizer:
@@ -826,65 +827,154 @@ class MILPDispatchOptimizer:
         self,
         df: pd.DataFrame,
         init_bat: float,
-        init_h2: float,
+        init_dispatchable_state: float,
         prev_peak: float = 0,
     ) -> DispatchResult:
         solver = self._build_solver()
         v = self._create_variables(solver, len(df))
 
-        self._add_constraints(solver, v, df, init_bat, init_h2, prev_peak)
+        self._add_constraints(
+            solver,
+            v,
+            df,
+            init_bat,
+            init_dispatchable_state,
+            prev_peak,
+        )
         self._set_objective(solver, v, df)
 
         status = solver.Solve()
         status_str = self._status_to_str(status)
         solve_time_sec = float(solver.WallTime()) / 1000.0
 
-        if status not in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE):
+        if status not in (
+            pywraplp.Solver.OPTIMAL,
+            pywraplp.Solver.FEASIBLE,
+        ):
+            if self.route == "hydrogen":
+                final_h2_kg = init_dispatchable_state
+                final_biomethane_nm3 = 0.0
+            else:
+                final_h2_kg = 0.0
+                final_biomethane_nm3 = init_dispatchable_state
+
             return DispatchResult(
                 dispatch_df=pd.DataFrame(),
                 final_battery_kwh=init_bat,
-                final_h2_kg=init_h2,
+                final_h2_kg=final_h2_kg,
                 objective_value=0.0,
                 solver_status=status_str,
                 solve_time_sec=solve_time_sec,
                 milp_gap=None,
+                final_biomethane_nm3=final_biomethane_nm3,
             )
 
         rows: list[dict[str, float | int]] = []
+
         for t in range(len(df)):
             local_hour = int(df.iloc[t]["hour"]) % 24
             global_hour = int(df.iloc[t]["t_global"])
 
-            rows.append(
-                {
-                    "t_global": global_hour,
-                    "hour": int(df.iloc[t]["hour"]),
-                    "demand_kw": float(df.iloc[t]["demand_kw"]),
-                    "pv_kw": self.pv_kw * float(df.iloc[t]["pv_factor"]),
-                    "p_grid_kw": float(v["p_grid"][t].solution_value()),
-                    "p_pv_used_kw": float(v["p_pv_used"][t].solution_value()),
-                    "p_pv_curtail_kw": float(v["p_pv_curtail"][t].solution_value()),
-                    "p_bat_ch_kw": float(v["p_bat_ch"][t].solution_value()),
-                    "p_bat_dis_kw": float(v["p_bat_dis"][t].solution_value()),
-                    "p_elz_kw": float(v["p_elz"][t].solution_value()),
-                    "p_fc_kw": float(v["p_fc"][t].solution_value()),
-                    "soc_bat_kwh": float(v["soc"][t].solution_value()),
-                    "h2_level_kg": float(v["h2"][t].solution_value()),
-                    "p_unserved_kw": float(v["unserved"][t].solution_value()),
-                    "blackout_flag": int(self._is_blackout_hour(global_hour, local_hour)),
-                }
+            row: dict[str, float | int] = {
+                "t_global": global_hour,
+                "hour": int(df.iloc[t]["hour"]),
+                "demand_kw": float(df.iloc[t]["demand_kw"]),
+                "pv_kw": (
+                    self.pv_kw
+                    * float(df.iloc[t]["pv_factor"])
+                ),
+                "p_grid_kw": float(
+                    v["p_grid"][t].solution_value()
+                ),
+                "p_pv_used_kw": float(
+                    v["p_pv_used"][t].solution_value()
+                ),
+                "p_pv_curtail_kw": float(
+                    v["p_pv_curtail"][t].solution_value()
+                ),
+                "p_bat_ch_kw": float(
+                    v["p_bat_ch"][t].solution_value()
+                ),
+                "p_bat_dis_kw": float(
+                    v["p_bat_dis"][t].solution_value()
+                ),
+                "soc_bat_kwh": float(
+                    v["soc"][t].solution_value()
+                ),
+                "p_unserved_kw": float(
+                    v["unserved"][t].solution_value()
+                ),
+                "blackout_flag": int(
+                    self._is_blackout_hour(
+                        global_hour,
+                        local_hour,
+                    )
+                ),
+            }
+
+            if self.route == "hydrogen":
+                row.update(
+                    {
+                        "p_elz_kw": float(
+                            v["p_elz"][t].solution_value()
+                        ),
+                        "p_fc_kw": float(
+                            v["p_fc"][t].solution_value()
+                        ),
+                        "h2_level_kg": float(
+                            v["h2"][t].solution_value()
+                        ),
+                    }
+                )
+
+            elif self.route == "biomethane":
+                row.update(
+                    {
+                        "p_chp_kw": float(
+                            v["p_chp"][t].solution_value()
+                        ),
+                        "biomethane_use_nm3": float(
+                            v["biomethane_use"][t].solution_value()
+                        ),
+                        "biomethane_delivery_nm3": float(
+                            v["biomethane_delivery"][t].solution_value()
+                        ),
+                        "biomethane_level_nm3": float(
+                            v["biomethane_level"][t].solution_value()
+                        ),
+                    }
+                )
+
+            rows.append(row)
+
+        final_battery_kwh = float(
+            v["soc"][len(df) - 1].solution_value()
+        )
+
+        if self.route == "hydrogen":
+            final_h2_kg = float(
+                v["h2"][len(df) - 1].solution_value()
+            )
+            final_biomethane_nm3 = 0.0
+
+        else:
+            final_h2_kg = 0.0
+            final_biomethane_nm3 = float(
+                v["biomethane_level"][len(df) - 1].solution_value()
             )
 
         return DispatchResult(
             dispatch_df=pd.DataFrame(rows),
-            final_battery_kwh=float(v["soc"][len(df) - 1].solution_value()),
-            final_h2_kg=float(v["h2"][len(df) - 1].solution_value()),
-            objective_value=float(solver.Objective().Value()),
+            final_battery_kwh=final_battery_kwh,
+            final_h2_kg=final_h2_kg,
+            objective_value=float(
+                solver.Objective().Value()
+            ),
             solver_status=status_str,
             solve_time_sec=solve_time_sec,
             milp_gap=None,
+            final_biomethane_nm3=final_biomethane_nm3,
         )
-
     # ---------------------------------------------------------
 
     def run_annual_simulation(self, df: pd.DataFrame, period_hours: int = 168) -> DispatchResult:
