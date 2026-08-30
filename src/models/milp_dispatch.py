@@ -59,9 +59,17 @@ class MILPDispatchOptimizer:
         # ---------------------------------------------------------
         self.pv_kw = float(capacities["pv_kw"])
         self.bsv_nominal_kwh = float(capacities["bsv_kwh"])
-        self.electrolyzer_kw = float(capacities["electrolyzer_kw"])
-        self.h2_tank_kg = float(capacities["h2_tank_kg"])
-        self.fuelcell_kw = float(capacities["fuelcell_kw"])
+
+        if self.route == "hydrogen":
+            self.electrolyzer_kw = float(capacities["electrolyzer_kw"])
+            self.h2_tank_kg = float(capacities["h2_tank_kg"])
+            self.fuelcell_kw = float(capacities["fuelcell_kw"])
+
+        elif self.route == "biomethane":
+            self.biomethane_storage_nm3 = float(
+                capacities["biomethane_storage_nm3"]
+            )
+            self.chp_kw = float(capacities["chp_kw"])
 
         # ---------------------------------------------------------
         # BATERIA
@@ -85,22 +93,126 @@ class MILPDispatchOptimizer:
         self.eff_battery_dis = eff_rt ** 0.5
 
         # ---------------------------------------------------------
-        # H2
+        # DISPATCHABLE TECHNOLOGY ROUTE
         # ---------------------------------------------------------
-        eff = self.config["technology"]["efficiencies"]
-        self.eff_electrolyzer = float(eff["electrolyzer"])
-        self.eff_fuelcell = float(eff["fuelcell"])
+        if self.route == "hydrogen":
+            eff = self.config["technology"]["efficiencies"]
 
-        if self.eff_electrolyzer <= 0 or self.eff_fuelcell <= 0:
-            raise ValueError("Hydrogen efficiencies must be > 0")
+            self.eff_electrolyzer = float(eff["electrolyzer"])
+            self.eff_fuelcell = float(eff["fuelcell"])
 
-        self.h2_lhv = float(self.config["technology"]["hydrogen"]["lhv_kwh_per_kg"])
-        if self.h2_lhv <= 0:
-            raise ValueError("technology.hydrogen.lhv_kwh_per_kg must be > 0")
+            if self.eff_electrolyzer <= 0 or self.eff_fuelcell <= 0:
+                raise ValueError("Hydrogen efficiencies must be > 0")
 
-        self.h2_soc_init_fraction = float(
-            self.config["technology"]["h2_storage"]["soc_init_fraction"]
-        )
+            self.h2_lhv = float(
+                self.config["technology"]["hydrogen"]["lhv_kwh_per_kg"]
+            )
+            if self.h2_lhv <= 0:
+                raise ValueError(
+                    "technology.hydrogen.lhv_kwh_per_kg must be > 0"
+                )
+
+            self.h2_soc_init_fraction = float(
+                self.config["technology"]["h2_storage"]["soc_init_fraction"]
+            )
+
+            if not 0.0 <= self.h2_soc_init_fraction <= 1.0:
+                raise ValueError(
+                    "technology.h2_storage.soc_init_fraction must be in [0, 1]"
+                )
+
+        elif self.route == "biomethane":
+            bm_cfg = self.config["technology"]["biomethane"]
+            bm_storage_cfg = self.config["technology"]["biomethane_storage"]
+            chp_cfg = self.config["technology"]["chp"]
+
+            self.biomethane_lhv_kwh_per_nm3 = float(
+                bm_cfg["lhv_kwh_per_nm3"]
+            )
+            self.biomethane_methane_fraction = float(
+                bm_cfg["methane_fraction"]
+            )
+            self.biomethane_max_supply_nm3_day = float(
+                bm_cfg["max_supply_nm3_day"]
+            )
+
+            self.biomethane_soc_init_fraction = float(
+                bm_storage_cfg["soc_init_fraction"]
+            )
+            self.biomethane_soc_min_fraction = float(
+                bm_storage_cfg.get("soc_min_fraction", 0.0)
+            )
+            self.biomethane_terminal_cyclic = bool(
+                bm_storage_cfg.get("enforce_terminal_cyclic_state", False)
+            )
+
+            self.chp_efficiency_el = float(chp_cfg["eta_el"])
+            self.chp_availability_fraction = float(
+                chp_cfg.get("availability_fraction", 1.0)
+            )
+
+            if self.biomethane_lhv_kwh_per_nm3 <= 0:
+                raise ValueError(
+                    "technology.biomethane.lhv_kwh_per_nm3 must be > 0"
+                )
+
+            if not 0.0 < self.biomethane_methane_fraction <= 1.0:
+                raise ValueError(
+                    "technology.biomethane.methane_fraction must be in (0, 1]"
+                )
+
+            if self.biomethane_max_supply_nm3_day < 0:
+                raise ValueError(
+                    "technology.biomethane.max_supply_nm3_day must be >= 0"
+                )
+
+            if not 0.0 <= self.biomethane_soc_init_fraction <= 1.0:
+                raise ValueError(
+                    "technology.biomethane_storage.soc_init_fraction must be in [0, 1]"
+                )
+
+            if not 0.0 <= self.biomethane_soc_min_fraction <= 1.0:
+                raise ValueError(
+                    "technology.biomethane_storage.soc_min_fraction must be in [0, 1]"
+                )
+
+            if not 0.0 < self.chp_efficiency_el <= 1.0:
+                raise ValueError(
+                    "technology.chp.eta_el must be in (0, 1]"
+                )
+
+            if not 0.0 <= self.chp_availability_fraction <= 1.0:
+                raise ValueError(
+                    "technology.chp.availability_fraction must be in [0, 1]"
+                )
+
+            delivery_cfg = self.config["delivery"]
+
+            self.biomethane_delivery_enabled = bool(
+                delivery_cfg.get("enabled", True)
+            )
+            self.biomethane_delivery_hour = int(
+                delivery_cfg["hour"]
+            )
+            self.biomethane_delivery_max_nm3_day = float(
+                delivery_cfg["max_nm3_per_day"]
+            )
+            self.biomethane_optimize_delivery_volume = bool(
+                delivery_cfg.get("optimize_delivery_volume", True)
+            )
+            self.biomethane_max_deliveries_per_day = int(
+                delivery_cfg.get("max_deliveries_per_day", 1)
+            )
+
+            if not 0 <= self.biomethane_delivery_hour <= 23:
+                raise ValueError(
+                    "delivery.hour must be between 0 and 23"
+                )
+
+            if self.biomethane_delivery_max_nm3_day < 0:
+                raise ValueError(
+                    "delivery.max_nm3_per_day must be >= 0"
+                )
 
         # ---------------------------------------------------------
         # TARIFA
@@ -140,9 +252,41 @@ class MILPDispatchOptimizer:
         self.global_peak_penalty_weight = float(obj_cfg.get("global_peak_penalty_weight", 0.0))
 
         eco_cfg = self.config.get("economics", {})
-        h2_var_cfg = eco_cfg.get("opex_variable_h2", {})
-        self.elz_variable_cost_usd_kwh = float(h2_var_cfg.get("electrolyzer_usd_kwh", 0.0))
-        self.fc_variable_cost_usd_kwh = float(h2_var_cfg.get("fuelcell_usd_kwh", 0.0))
+
+        if self.route == "hydrogen":
+            h2_var_cfg = eco_cfg.get("opex_variable_h2", {})
+
+            self.elz_variable_cost_usd_kwh = float(
+                h2_var_cfg.get("electrolyzer_usd_kwh", 0.0)
+            )
+            self.fc_variable_cost_usd_kwh = float(
+                h2_var_cfg.get("fuelcell_usd_kwh", 0.0)
+            )
+
+        elif self.route == "biomethane":
+            bm_var_cfg = eco_cfg.get(
+                "opex_variable_biomethane",
+                {}
+            )
+
+            self.biomethane_price_usd_nm3 = float(
+                bm_var_cfg.get("biomethane_usd_per_nm3", 0.0)
+            )
+            self.chp_variable_cost_usd_kwh = float(
+                bm_var_cfg.get("chp_usd_per_kwh", 0.0)
+            )
+
+            if self.biomethane_price_usd_nm3 < 0:
+                raise ValueError(
+                    "economics.opex_variable_biomethane."
+                    "biomethane_usd_per_nm3 must be >= 0"
+                )
+
+            if self.chp_variable_cost_usd_kwh < 0:
+                raise ValueError(
+                    "economics.opex_variable_biomethane."
+                    "chp_usd_per_kwh must be >= 0"
+                )
 
         # penalidade leve de throughput da bateria para evitar cycling artificial
         self.battery_discharge_penalty_usd_kwh = float(
@@ -207,29 +351,151 @@ class MILPDispatchOptimizer:
 
     def _create_variables(self, solver: pywraplp.Solver, T: int) -> dict[str, object]:
         if self.allow_unserved:
-            unserved_vars = [solver.NumVar(0, solver.infinity(), f"un_{t}") for t in range(T)]
+            unserved_vars = [
+                solver.NumVar(0, solver.infinity(), f"un_{t}")
+                for t in range(T)
+            ]
         else:
-            unserved_vars = [solver.NumVar(0, 0, f"un_{t}") for t in range(T)]
+            unserved_vars = [
+                solver.NumVar(0, 0, f"un_{t}")
+                for t in range(T)
+            ]
 
-        return {
-            "p_grid": [solver.NumVar(0, self.grid_power_max_kw, f"grid_{t}") for t in range(T)],
-            "p_pv_used": [solver.NumVar(0, self.pv_kw, f"pv_used_{t}") for t in range(T)],
-            "p_pv_curtail": [solver.NumVar(0, self.pv_kw, f"pv_cur_{t}") for t in range(T)],
-            "p_bat_ch": [solver.NumVar(0, self.battery_power_max_kw, f"bat_ch_{t}") for t in range(T)],
-            "p_bat_dis": [solver.NumVar(0, self.battery_power_max_kw, f"bat_dis_{t}") for t in range(T)],
-            "p_elz": [solver.NumVar(0, self.electrolyzer_kw, f"elz_{t}") for t in range(T)],
-            "p_fc": [solver.NumVar(0, self.fuelcell_kw, f"fc_{t}") for t in range(T)],
-            "soc": [
-                solver.NumVar(self.battery_soc_min_kwh, self.usable_battery_kwh, f"soc_{t}")
+        # -----------------------------------------------------
+        # Variaveis comuns a todas as rotas
+        # -----------------------------------------------------
+        variables: dict[str, object] = {
+            "p_grid": [
+                solver.NumVar(0, self.grid_power_max_kw, f"grid_{t}")
                 for t in range(T)
             ],
-            "h2": [solver.NumVar(0, self.h2_tank_kg, f"h2_{t}") for t in range(T)],
+            "p_pv_used": [
+                solver.NumVar(0, self.pv_kw, f"pv_used_{t}")
+                for t in range(T)
+            ],
+            "p_pv_curtail": [
+                solver.NumVar(0, self.pv_kw, f"pv_cur_{t}")
+                for t in range(T)
+            ],
+            "p_bat_ch": [
+                solver.NumVar(
+                    0,
+                    self.battery_power_max_kw,
+                    f"bat_ch_{t}",
+                )
+                for t in range(T)
+            ],
+            "p_bat_dis": [
+                solver.NumVar(
+                    0,
+                    self.battery_power_max_kw,
+                    f"bat_dis_{t}",
+                )
+                for t in range(T)
+            ],
+            "soc": [
+                solver.NumVar(
+                    self.battery_soc_min_kwh,
+                    self.usable_battery_kwh,
+                    f"soc_{t}",
+                )
+                for t in range(T)
+            ],
             "unserved": unserved_vars,
-            "u_bat_mode": [solver.BoolVar(f"u_bat_mode_{t}") for t in range(T)],
-            "u_h2_mode": [solver.BoolVar(f"u_h2_mode_{t}") for t in range(T)],
-            "P_peak": solver.NumVar(0, self.grid_power_max_kw, "P_peak"),
+            "u_bat_mode": [
+                solver.BoolVar(f"u_bat_mode_{t}")
+                for t in range(T)
+            ],
+            "P_peak": solver.NumVar(
+                0,
+                self.grid_power_max_kw,
+                "P_peak",
+            ),
         }
 
+        # -----------------------------------------------------
+        # Rota hydrogen
+        # -----------------------------------------------------
+        if self.route == "hydrogen":
+            variables.update(
+                {
+                    "p_elz": [
+                        solver.NumVar(
+                            0,
+                            self.electrolyzer_kw,
+                            f"elz_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                    "p_fc": [
+                        solver.NumVar(
+                            0,
+                            self.fuelcell_kw,
+                            f"fc_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                    "h2": [
+                        solver.NumVar(
+                            0,
+                            self.h2_tank_kg,
+                            f"h2_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                    "u_h2_mode": [
+                        solver.BoolVar(f"u_h2_mode_{t}")
+                        for t in range(T)
+                    ],
+                }
+            )
+
+        # -----------------------------------------------------
+        # Rota biomethane
+        # -----------------------------------------------------
+        elif self.route == "biomethane":
+            chp_power_available_kw = (
+                self.chp_kw * self.chp_availability_fraction
+            )
+
+            variables.update(
+                {
+                    "p_chp": [
+                        solver.NumVar(
+                            0,
+                            chp_power_available_kw,
+                            f"chp_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                    "biomethane_use": [
+                        solver.NumVar(
+                            0,
+                            solver.infinity(),
+                            f"bm_use_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                    "biomethane_delivery": [
+                        solver.NumVar(
+                            0,
+                            self.biomethane_delivery_max_nm3_day,
+                            f"bm_delivery_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                    "biomethane_level": [
+                        solver.NumVar(
+                            0,
+                            self.biomethane_storage_nm3,
+                            f"bm_level_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                }
+            )
+
+        return variables
     # ---------------------------------------------------------
 
     def _add_constraints(
