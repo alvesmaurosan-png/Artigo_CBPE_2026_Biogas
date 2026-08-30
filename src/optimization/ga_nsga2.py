@@ -800,8 +800,6 @@ class NSGA2Optimizer:
                 enriched.update({
                     "P_peak_grid_ref_kw": P_ref,
                     "Peak_reduction_percent": peak_reduction,
-                    "E_grid_peak_opt_kWh": float(peak_metrics["E_grid_peak_opt_kwh"]),
-                    "E_grid_peak_ref_kWh": float(peak_metrics["E_grid_peak_ref_kwh"]),
                     "R_peak_percent": float(peak_metrics["R_peak_percent"]),
                     "peak_grid_dependency_percent": float(peak_metrics["peak_grid_dependency_percent"]),
                 })
