@@ -504,7 +504,7 @@ class MILPDispatchOptimizer:
             v: dict[str, object],
             df: pd.DataFrame,
             init_bat: float,
-            init_h2: float,
+            init_dispatchable_state: float,
             prev_peak: float,
     ) -> None:
 
@@ -512,6 +512,15 @@ class MILPDispatchOptimizer:
 
         dt = self.timestep_hours
         T = len(df)
+
+        # -----------------------------------------------------
+        # Limite diario efetivo de fornecimento de biometano
+        # -----------------------------------------------------
+        if self.route == "biomethane":
+            biomethane_daily_delivery_limit = min(
+                self.biomethane_delivery_max_nm3_day,
+                self.biomethane_max_supply_nm3_day,
+            )
 
         for t in range(T):
             pv = self.pv_kw * float(df.iloc[t]["pv_factor"])
@@ -521,23 +530,39 @@ class MILPDispatchOptimizer:
             global_hour = int(df.iloc[t]["t_global"])
 
             # -------------------------------------------------
-            # Balanço de potência
+            # Balanco eletrico por rota
             # -------------------------------------------------
-            solver.Add(
-                v["p_grid"][t]
-                + v["p_pv_used"][t]
-                + v["p_bat_dis"][t]
-                + v["p_fc"][t]
-                + v["unserved"][t]
-                == demand
-                + v["p_bat_ch"][t]
-                + v["p_elz"][t]
-            )
+            if self.route == "hydrogen":
+                solver.Add(
+                    v["p_grid"][t]
+                    + v["p_pv_used"][t]
+                    + v["p_bat_dis"][t]
+                    + v["p_fc"][t]
+                    + v["unserved"][t]
+                    == demand
+                    + v["p_bat_ch"][t]
+                    + v["p_elz"][t]
+                )
+
+            elif self.route == "biomethane":
+                solver.Add(
+                    v["p_grid"][t]
+                    + v["p_pv_used"][t]
+                    + v["p_bat_dis"][t]
+                    + v["p_chp"][t]
+                    + v["unserved"][t]
+                    == demand
+                    + v["p_bat_ch"][t]
+                )
 
             # -------------------------------------------------
             # PV
             # -------------------------------------------------
-            solver.Add(v["p_pv_used"][t] + v["p_pv_curtail"][t] == pv)
+            solver.Add(
+                v["p_pv_used"][t]
+                + v["p_pv_curtail"][t]
+                == pv
+            )
 
             # -------------------------------------------------
             # Grid
@@ -548,81 +573,206 @@ class MILPDispatchOptimizer:
                 solver.Add(v["p_grid"][t] == 0)
 
             # -------------------------------------------------
-            # Não simultaneidade bateria
+            # Nao simultaneidade bateria
             # -------------------------------------------------
             solver.Add(
                 v["p_bat_dis"][t]
-                <= v["u_bat_mode"][t] * self.battery_power_max_kw
+                <= v["u_bat_mode"][t]
+                * self.battery_power_max_kw
             )
+
             solver.Add(
                 v["p_bat_ch"][t]
-                <= (1 - v["u_bat_mode"][t]) * self.battery_power_max_kw
+                <= (1 - v["u_bat_mode"][t])
+                * self.battery_power_max_kw
             )
 
             # -------------------------------------------------
-            # Dinâmica bateria
+            # Dinamica bateria
             # -------------------------------------------------
             delta_soc = (
-                    v["p_bat_ch"][t] * self.eff_battery_ch * dt
-                    - v["p_bat_dis"][t] * dt / self.eff_battery_dis
+                v["p_bat_ch"][t]
+                * self.eff_battery_ch
+                * dt
+                - v["p_bat_dis"][t]
+                * dt
+                / self.eff_battery_dis
             )
 
             if t == 0:
-                solver.Add(v["soc"][t] == init_bat + delta_soc)
+                solver.Add(
+                    v["soc"][t]
+                    == init_bat + delta_soc
+                )
             else:
-                solver.Add(v["soc"][t] == v["soc"][t - 1] + delta_soc)
+                solver.Add(
+                    v["soc"][t]
+                    == v["soc"][t - 1] + delta_soc
+                )
 
-            # -------------------------------------------------
-            # Não simultaneidade H2
-            # -------------------------------------------------
-            solver.Add(
-                v["p_fc"][t]
-                <= v["u_h2_mode"][t] * self.fuelcell_kw
-            )
-            solver.Add(
-                v["p_elz"][t]
-                <= (1 - v["u_h2_mode"][t]) * self.electrolyzer_kw
-            )
+            # =================================================
+            # ROTA HYDROGEN
+            # =================================================
+            if self.route == "hydrogen":
 
-            # -------------------------------------------------
-            # Dinâmica H2 (EM KG — consistente)
-            # -------------------------------------------------
-            h2_prod = (
+                # ---------------------------------------------
+                # Nao simultaneidade ELZ / FC
+                # ---------------------------------------------
+                solver.Add(
+                    v["p_fc"][t]
+                    <= v["u_h2_mode"][t]
+                    * self.fuelcell_kw
+                )
+
+                solver.Add(
+                    v["p_elz"][t]
+                    <= (1 - v["u_h2_mode"][t])
+                    * self.electrolyzer_kw
+                )
+
+                # ---------------------------------------------
+                # Dinamica H2
+                # ---------------------------------------------
+                h2_prod = (
                     v["p_elz"][t]
                     * self.eff_electrolyzer
                     * dt
                     / self.h2_lhv
-            )
+                )
 
-            h2_cons = (
+                h2_cons = (
                     v["p_fc"][t]
                     * dt
                     / self.eff_fuelcell
                     / self.h2_lhv
+                )
+
+                if t == 0:
+                    solver.Add(
+                        v["h2"][t]
+                        == init_dispatchable_state
+                        + h2_prod
+                        - h2_cons
+                    )
+                else:
+                    solver.Add(
+                        v["h2"][t]
+                        == v["h2"][t - 1]
+                        + h2_prod
+                        - h2_cons
+                    )
+
+                # FC nao pode exceder demanda
+                solver.Add(v["p_fc"][t] <= demand)
+
+            # =================================================
+            # ROTA BIOMETHANE
+            # =================================================
+            elif self.route == "biomethane":
+
+                # ---------------------------------------------
+                # CHP -> consumo de biometano
+                #
+                # V_BM = P_CHP * dt / (eta_el * PCI_BM)
+                # ---------------------------------------------
+                solver.Add(
+                    v["biomethane_use"][t]
+                    * self.chp_efficiency_el
+                    * self.biomethane_lhv_kwh_per_nm3
+                    == v["p_chp"][t] * dt
+                )
+
+                # ---------------------------------------------
+                # Entrega
+                # ---------------------------------------------
+                if (
+                    not self.biomethane_delivery_enabled
+                    or local_hour != self.biomethane_delivery_hour
+                ):
+                    solver.Add(
+                        v["biomethane_delivery"][t] == 0
+                    )
+
+                # ---------------------------------------------
+                # Dinamica do estoque de biometano
+                # ---------------------------------------------
+                if t == 0:
+                    solver.Add(
+                        v["biomethane_level"][t]
+                        == init_dispatchable_state
+                        + v["biomethane_delivery"][t]
+                        - v["biomethane_use"][t]
+                    )
+                else:
+                    solver.Add(
+                        v["biomethane_level"][t]
+                        == v["biomethane_level"][t - 1]
+                        + v["biomethane_delivery"][t]
+                        - v["biomethane_use"][t]
+                    )
+
+                # ---------------------------------------------
+                # Estoque minimo
+                # ---------------------------------------------
+                solver.Add(
+                    v["biomethane_level"][t]
+                    >= (
+                        self.biomethane_storage_nm3
+                        * self.biomethane_soc_min_fraction
+                    )
+                )
+
+        # =====================================================
+        # RESTRICOES GLOBAIS POR ROTA
+        # =====================================================
+
+        if self.route == "hydrogen":
+
+            # -------------------------------------------------
+            # Conservacao global H2
+            # -------------------------------------------------
+            solver.Add(
+                sum(
+                    v["p_fc"][t]
+                    * dt
+                    / self.eff_fuelcell
+                    / self.h2_lhv
+                    for t in range(T)
+                )
+                <= init_dispatchable_state
+                + sum(
+                    v["p_elz"][t]
+                    * self.eff_electrolyzer
+                    * dt
+                    / self.h2_lhv
+                    for t in range(T)
+                )
             )
 
-            if t == 0:
-                solver.Add(v["h2"][t] == init_h2 + h2_prod - h2_cons)
-            else:
-                solver.Add(v["h2"][t] == v["h2"][t - 1] + h2_prod - h2_cons)
+        elif self.route == "biomethane":
 
-            # FC não pode exceder demanda
-            solver.Add(v["p_fc"][t] <= demand)
+            # -------------------------------------------------
+            # Limite de entrega por dia calendario
+            # -------------------------------------------------
+            day_groups: dict[int, list[int]] = {}
 
-        # -----------------------------------------------------
-        # CONSERVAÇÃO GLOBAL DO H2 (EM KG — CORRETO)
-        # -----------------------------------------------------
-        solver.Add(
-            sum(
-                v["p_fc"][t] * dt / self.eff_fuelcell / self.h2_lhv
-                for t in range(T)
-            )
-            <= init_h2
-            + sum(
-                v["p_elz"][t] * self.eff_electrolyzer * dt / self.h2_lhv
-                for t in range(T)
-            )
-        )
+            for t in range(T):
+                global_hour = int(df.iloc[t]["t_global"])
+                day_index = global_hour // 24
+                day_groups.setdefault(day_index, []).append(t)
+
+            for indices in day_groups.values():
+                solver.Add(
+                    sum(
+                        v["biomethane_delivery"][t]
+                        for t in indices
+                    )
+                    <= biomethane_daily_delivery_limit
+                )
+
+            # A condicao terminal ciclica nao e aplicada aqui.
+            # Ela deve ser imposta somente no fim do horizonte
+            # anual, e nao em cada bloco do rolling horizon.
     # ---------------------------------------------------------
 
     def _set_objective(self, solver: pywraplp.Solver, v: dict[str, object], df: pd.DataFrame) -> None:
