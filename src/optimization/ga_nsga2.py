@@ -56,6 +56,18 @@ class NSGA2Optimizer:
         # ATRIBUIÇÕES BÁSICAS
         # --------------------------------------------------
         self.config = config
+
+        # System route. Legacy configurations without system.route
+        # remain hydrogen by default.
+        self.route = str(
+            self.config.get("system", {}).get("route", "hydrogen")
+        ).strip().lower()
+
+        if self.route not in {"hydrogen", "biomethane"}:
+            raise ValueError(
+                f"Unsupported system.route: {self.route!r}. "
+                "Expected 'hydrogen' or 'biomethane'."
+            )
         self.df_h = df_h
 
         # --------------------------------------------------
