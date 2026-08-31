@@ -205,19 +205,26 @@ class NSGA2Optimizer:
 
         return repaired
 
-    def _repair_logical_consistency(self, capacities: Dict[str, float]) -> Dict[str, float]:
+    def _repair_logical_consistency(
+        self,
+        capacities: Dict[str, float],
+    ) -> Dict[str, float]:
         cap = capacities.copy()
 
-        if cap.get("h2_tank_kg", 0.0) <= 0.0:
-            cap["electrolyzer_kw"] = 0.0
-            cap["fuelcell_kw"] = 0.0
+        if self.route == "hydrogen":
+            if cap.get("h2_tank_kg", 0.0) <= 0.0:
+                cap["electrolyzer_kw"] = 0.0
+                cap["fuelcell_kw"] = 0.0
 
-        if cap.get("electrolyzer_kw", 0.0) <= 0.0:
-            cap["h2_tank_kg"] = 0.0
-            cap["fuelcell_kw"] = 0.0
+            if cap.get("electrolyzer_kw", 0.0) <= 0.0:
+                cap["h2_tank_kg"] = 0.0
+                cap["fuelcell_kw"] = 0.0
 
-        if cap.get("fuelcell_kw", 0.0) <= 0.0:
-            cap["h2_tank_kg"] = 0.0
+            if cap.get("fuelcell_kw", 0.0) <= 0.0:
+                cap["h2_tank_kg"] = 0.0
+
+        elif self.route == "biomethane":
+            pass
 
         return cap
 
@@ -489,6 +496,18 @@ class NSGA2Optimizer:
             "fixed_opex_annual_usd": float(economics["fixed_opex_annual_usd"]),
             "variable_h2_opex_annual_usd": float(
                 economics.get("variable_h2_opex_annual_usd", 0.0)
+            ),
+            "biomethane_fuel_opex_annual_usd": float(
+                economics.get("biomethane_fuel_opex_annual_usd", 0.0)
+            ),
+            "chp_variable_opex_annual_usd": float(
+                economics.get("chp_variable_opex_annual_usd", 0.0)
+            ),
+            "variable_biomethane_opex_annual_usd": float(
+                economics.get("variable_biomethane_opex_annual_usd", 0.0)
+            ),
+            "variable_dispatchable_opex_annual_usd": float(
+                economics.get("variable_dispatchable_opex_annual_usd", 0.0)
             ),
             "degradation_opex_annual_usd": float(
                 economics.get("degradation_opex_annual_usd", 0.0)
@@ -799,11 +818,8 @@ class NSGA2Optimizer:
             for _, row in pareto_df.iterrows():
 
                 capacities = {
-                    "pv_kw": float(row["pv_kw"]),
-                    "bsv_kwh": float(row["bsv_kwh"]),
-                    "electrolyzer_kw": float(row["electrolyzer_kw"]),
-                    "h2_tank_kg": float(row["h2_tank_kg"]),
-                    "fuelcell_kw": float(row["fuelcell_kw"]),
+                    var: float(row[var])
+                    for var in self.decision_variables
                 }
 
                 # -----------------------------------
