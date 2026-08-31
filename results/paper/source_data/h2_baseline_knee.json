@@ -1,0 +1,35 @@
+{
+  "baseline_id": "H2-KNEE-REF",
+  "method": "consolidated non-dominated front from cold-start and warm-start NSGA-II runs; knee selected by maximum perpendicular distance in normalized objective space",
+  "source_run": "cold_start_20260830_174912",
+  "source_solution_id": 17,
+  "global_solution_id": 41,
+  "capacities": {
+    "pv_kw": 628.0,
+    "bsv_kwh": 1462.0,
+    "electrolyzer_kw": 240.0,
+    "h2_tank_kg": 58.0,
+    "fuelcell_kw": 60.0
+  },
+  "performance": {
+    "lcoe_usd_kwh": 0.1616318346458821,
+    "P_peak_grid_opt_kw": 409.2257929892148,
+    "P_peak_grid_ref_kw": 474.8149521321564,
+    "Peak_reduction_percent": 13.813625465755342,
+    "E_grid_total_kwh": 1182026.919792423,
+    "E_load_total_kwh": 2268096.0450061434,
+    "total_grid_dependency_ratio": 0.5211538207982817,
+    "E_grid_peak_opt_kwh": 3329.863523313121,
+    "R_peak_percent": 98.97772984659824
+  },
+  "economics": {
+    "capex_total_usd": 1542440.0,
+    "annualized_capex_usd": 157100.9209771804,
+    "fixed_opex_annual_usd": 25000.8,
+    "variable_h2_opex_annual_usd": 6025.313728208634,
+    "grid_opex_annual_usd": 178469.49020202307
+  },
+  "solver": {
+    "milp_status": "OPTIMAL"
+  }
+}
