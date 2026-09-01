@@ -976,24 +976,43 @@ def resolve_runs_root(project_root: Path) -> Path:
     return candidates[0]
 
 
-def infer_run_name_from_config(config_path: Path) -> str:
+def infer_run_name_from_config(
+    config_path: Path,
+    route: str = "hydrogen",
+) -> str:
     config_name = config_path.stem
+
+    route = str(route).strip().lower()
+
+    if route == "hydrogen":
+        suffix = "with_h2"
+    elif route == "biomethane":
+        suffix = "with_biomethane"
+    else:
+        raise ValueError(
+            f"Unsupported system.route: {route!r}"
+        )
 
     if config_name.endswith("_no_penalty"):
-        return config_name.replace("_no_penalty", "_with_h2_no_penalty")
+        return config_name.replace(
+            "_no_penalty",
+            f"_{suffix}_no_penalty",
+        )
 
-    return f"{config_name}_with_h2"
+    return f"{config_name}_{suffix}"
 
 
-def build_output_dirs(project_root: Path, config_path: Path) -> tuple[Path, Path]:
+def build_output_dirs(
+    project_root: Path,
+    config_path: Path,
+    route: str = "hydrogen",
+) -> tuple[Path, Path]:
     runs_root = resolve_runs_root(project_root)
 
-    config_name = config_path.stem
-
-    if "no_penalty" in config_name:
-        scenario_name = config_name.replace("_no_penalty", "_with_h2_no_penalty")
-    else:
-        scenario_name = config_name + "_with_h2"
+    scenario_name = infer_run_name_from_config(
+        config_path,
+        route=route,
+    )
 
     scenario_dir = runs_root / scenario_name
 
@@ -1072,7 +1091,11 @@ def main() -> None:
     if pareto_df.empty:
         raise RuntimeError("Pareto vazio — todas as soluções ficaram inviáveis.")
 
-    run_dir, latest_dir = build_output_dirs(PROJECT_ROOT, config_path)
+    run_dir, latest_dir = build_output_dirs(
+        PROJECT_ROOT,
+        config_path,
+        route=optimizer.route,
+    )
     save_outputs(pareto_df, cfg, run_dir, latest_dir)
 
     print("\nArquivos gerados:")
