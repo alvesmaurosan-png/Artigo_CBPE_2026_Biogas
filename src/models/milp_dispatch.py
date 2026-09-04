@@ -17,6 +17,7 @@ class DispatchResult:
     solve_time_sec: float
     milp_gap: Optional[float] = None
     final_biomethane_nm3: float = 0.0
+    final_biogas_nm3: float = 0.0
 
 
 class MILPDispatchOptimizer:
@@ -32,10 +33,10 @@ class MILPDispatchOptimizer:
             self.config.get("system", {}).get("route", "hydrogen")
         ).strip().lower()
 
-        if self.route not in {"hydrogen", "biomethane"}:
+        if self.route not in {"hydrogen", "biomethane", "biogas"}:
             raise ValueError(
                 f"Unsupported system.route: {self.route!r}. "
-                "Expected 'hydrogen' or 'biomethane'."
+                "Expected 'hydrogen', 'biomethane' or 'biogas'."
             )
         self.capacities = capacities
         self.degradation_model = degradation_model
@@ -71,6 +72,22 @@ class MILPDispatchOptimizer:
                 capacities["biomethane_storage_nm3"]
             )
             self.chp_kw = float(capacities["chp_kw"])
+
+        elif self.route == "biogas":
+            self.biogas_storage_nm3 = float(
+                capacities["biogas_storage_nm3"]
+            )
+            self.chp_kw = float(capacities["chp_kw"])
+
+            if self.biogas_storage_nm3 <= 0:
+                raise ValueError(
+                    "capacities.biogas_storage_nm3 must be > 0"
+                )
+
+            if self.chp_kw <= 0:
+                raise ValueError(
+                    "capacities.chp_kw must be > 0"
+                )
 
         # ---------------------------------------------------------
         # BATERIA
@@ -215,6 +232,148 @@ class MILPDispatchOptimizer:
                     "delivery.max_nm3_per_day must be >= 0"
                 )
 
+        elif self.route == "biogas":
+            bg_cfg = self.config["technology"]["biogas"]
+            bg_storage_cfg = self.config["technology"]["biogas_storage"]
+            chp_bg_cfg = self.config["technology"]["chp_biogas"]
+
+            # -----------------------------------------------------
+            # Produção agregada de biogás
+            # -----------------------------------------------------
+            self.biogas_substrate_t_day = float(
+                bg_cfg["substrate_t_day"]
+            )
+            self.biogas_yield_nm3_per_t = float(
+                bg_cfg["biogas_yield_nm3_per_t"]
+            )
+            self.biogas_lhv_kwh_per_nm3 = float(
+                bg_cfg["lhv_kwh_per_nm3"]
+            )
+            self.biogas_parasitic_fraction = float(
+                bg_cfg.get("parasitic_fraction", 0.0)
+            )
+            self.biogas_production_mode = str(
+                bg_cfg.get(
+                    "production_mode",
+                    "constant_daily_average",
+                )
+            ).strip().lower()
+
+            if self.biogas_substrate_t_day < 0:
+                raise ValueError(
+                    "technology.biogas.substrate_t_day must be >= 0"
+                )
+
+            if self.biogas_yield_nm3_per_t <= 0:
+                raise ValueError(
+                    "technology.biogas.biogas_yield_nm3_per_t must be > 0"
+                )
+
+            if self.biogas_lhv_kwh_per_nm3 <= 0:
+                raise ValueError(
+                    "technology.biogas.lhv_kwh_per_nm3 must be > 0"
+                )
+
+            if not 0.0 <= self.biogas_parasitic_fraction < 1.0:
+                raise ValueError(
+                    "technology.biogas.parasitic_fraction "
+                    "must be in [0, 1)"
+                )
+
+            if self.biogas_production_mode != "constant_daily_average":
+                raise ValueError(
+                    "B2 physical baseline currently supports only "
+                    "technology.biogas.production_mode="
+                    "'constant_daily_average'"
+                )
+
+            self.biogas_production_nm3_hour = (
+                self.biogas_substrate_t_day
+                * self.biogas_yield_nm3_per_t
+                / 24.0
+            )
+
+            # -----------------------------------------------------
+            # Gasômetro
+            # -----------------------------------------------------
+            self.biogas_soc_init_fraction = float(
+                bg_storage_cfg["soc_init_fraction"]
+            )
+            self.biogas_soc_min_fraction = float(
+                bg_storage_cfg["soc_min_fraction"]
+            )
+            self.biogas_soc_max_fraction = float(
+                bg_storage_cfg["soc_max_fraction"]
+            )
+            self.biogas_terminal_cyclic = bool(
+                bg_storage_cfg.get(
+                    "enforce_terminal_cyclic_state",
+                    False,
+                )
+            )
+
+            if not (
+                0.0
+                <= self.biogas_soc_min_fraction
+                < self.biogas_soc_max_fraction
+                <= 1.0
+            ):
+                raise ValueError(
+                    "biogas storage requires "
+                    "0 <= SOCmin < SOCmax <= 1"
+                )
+
+            if not (
+                self.biogas_soc_min_fraction
+                <= self.biogas_soc_init_fraction
+                <= self.biogas_soc_max_fraction
+            ):
+                raise ValueError(
+                    "biogas initial SOC must lie between "
+                    "SOCmin and SOCmax"
+                )
+
+            # -----------------------------------------------------
+            # CHP B2
+            # -----------------------------------------------------
+            self.biogas_chp_efficiency_el = float(
+                chp_bg_cfg["eta_el"]
+            )
+            self.biogas_chp_efficiency_th = float(
+                chp_bg_cfg.get("eta_th", 0.0)
+            )
+            self.biogas_chp_min_load_fraction = float(
+                chp_bg_cfg["min_load_fraction"]
+            )
+
+            # Valor consolidado, mas sua tradução temporal ainda
+            # NÃO é aplicada como derating contínuo.
+            self.biogas_chp_availability_fraction = float(
+                chp_bg_cfg.get("availability_fraction", 1.0)
+            )
+
+            if not 0.0 < self.biogas_chp_efficiency_el <= 1.0:
+                raise ValueError(
+                    "technology.chp_biogas.eta_el must be in (0, 1]"
+                )
+
+            if not 0.0 <= self.biogas_chp_efficiency_th <= 1.0:
+                raise ValueError(
+                    "technology.chp_biogas.eta_th must be in [0, 1]"
+                )
+
+            if not 0.0 <= self.biogas_chp_min_load_fraction <= 1.0:
+                raise ValueError(
+                    "technology.chp_biogas.min_load_fraction "
+                    "must be in [0, 1]"
+                )
+
+            if not 0.0 <= self.biogas_chp_availability_fraction <= 1.0:
+                raise ValueError(
+                    "technology.chp_biogas.availability_fraction "
+                    "must be in [0, 1]"
+                )
+
         # ---------------------------------------------------------
         # TARIFA
         # ---------------------------------------------------------
@@ -306,6 +465,25 @@ class MILPDispatchOptimizer:
                 raise ValueError(
                     "economics.opex_variable_biomethane."
                     "chp_usd_per_kwh must be >= 0"
+                )
+
+        elif self.route == "biogas":
+            bg_var_cfg = eco_cfg.get(
+                "opex_variable_biogas",
+                {},
+            )
+
+            self.biogas_chp_variable_cost_usd_kwh_gross = float(
+                bg_var_cfg.get(
+                    "chp_usd_per_kwh_gross",
+                    0.0,
+                )
+            )
+
+            if self.biogas_chp_variable_cost_usd_kwh_gross < 0:
+                raise ValueError(
+                    "economics.opex_variable_biogas."
+                    "chp_usd_per_kwh_gross must be >= 0"
                 )
 
         # penalidade leve de throughput da bateria para evitar cycling artificial
@@ -518,6 +696,63 @@ class MILPDispatchOptimizer:
         # -----------------------------------------------------
         # MONTHLY DEMAND PEAK — M1b
         # -----------------------------------------------------
+        # -----------------------------------------------------
+        # Rota biogas — B2
+        # -----------------------------------------------------
+        elif self.route == "biogas":
+            biogas_level_min = (
+                self.biogas_storage_nm3
+                * self.biogas_soc_min_fraction
+            )
+            biogas_level_max = (
+                self.biogas_storage_nm3
+                * self.biogas_soc_max_fraction
+            )
+
+            variables.update(
+                {
+                    # Potência elétrica líquida entregue pela
+                    # rota B2 ao barramento da microrrede.
+                    "p_chp_net": [
+                        solver.NumVar(
+                            0,
+                            self.chp_kw,
+                            f"bg_chp_net_{t}",
+                        )
+                        for t in range(T)
+                    ],
+
+                    # Estado ligado/desligado da CHP.
+                    "u_chp_on": [
+                        solver.BoolVar(
+                            f"bg_chp_on_{t}"
+                        )
+                        for t in range(T)
+                    ],
+
+                    # Consumo horário de biogás.
+                    "biogas_use": [
+                        solver.NumVar(
+                            0,
+                            solver.infinity(),
+                            f"bg_use_{t}",
+                        )
+                        for t in range(T)
+                    ],
+
+                    # Estoque no gasômetro limitado diretamente
+                    # entre SOCmin e SOCmax.
+                    "biogas_level": [
+                        solver.NumVar(
+                            biogas_level_min,
+                            biogas_level_max,
+                            f"bg_level_{t}",
+                        )
+                        for t in range(T)
+                    ],
+                }
+            )
+
         if self.demand_charge_in_milp_objective:
             variables["P_peak_month"] = solver.NumVar(
                 0,
@@ -542,6 +777,7 @@ class MILPDispatchOptimizer:
             init_dispatchable_state: float,
             prev_peak: float,
             prev_monthly_peak: float = 0.0,
+            terminal_dispatchable_target: float | None = None,
     ) -> None:
 
         solver.Add(v["P_peak"] >= prev_peak)
@@ -595,6 +831,17 @@ class MILPDispatchOptimizer:
                     + v["p_pv_used"][t]
                     + v["p_bat_dis"][t]
                     + v["p_chp"][t]
+                    + v["unserved"][t]
+                    == demand
+                    + v["p_bat_ch"][t]
+                )
+
+            elif self.route == "biogas":
+                solver.Add(
+                    v["p_grid"][t]
+                    + v["p_pv_used"][t]
+                    + v["p_bat_dis"][t]
+                    + v["p_chp_net"][t]
                     + v["unserved"][t]
                     == demand
                     + v["p_bat_ch"][t]
@@ -772,6 +1019,74 @@ class MILPDispatchOptimizer:
                     )
                 )
 
+            # =================================================
+            # ROTA BIOGAS — B2
+            # =================================================
+            elif self.route == "biogas":
+
+                # ---------------------------------------------
+                # CHP ligado/desligado + carga mínima
+                #
+                # chp_kw representa potência elétrica líquida
+                # da rota B2 entregue ao barramento.
+                # ---------------------------------------------
+                solver.Add(
+                    v["p_chp_net"][t]
+                    <= self.chp_kw
+                    * v["u_chp_on"][t]
+                )
+
+                solver.Add(
+                    v["p_chp_net"][t]
+                    >= self.chp_kw
+                    * self.biogas_chp_min_load_fraction
+                    * v["u_chp_on"][t]
+                )
+
+                # ---------------------------------------------
+                # Biogás -> eletricidade líquida
+                #
+                # E_net =
+                # V_BG * PCI_BG * eta_el * (1 - parasitic)
+                #
+                # Esta equação reproduz a convenção consolidada
+                # da planilha B2-2026:
+                # 196,812 kWh/t bruto -> 177,1308 kWh/t líquido.
+                # ---------------------------------------------
+                solver.Add(
+                    v["biogas_use"][t]
+                    * self.biogas_lhv_kwh_per_nm3
+                    * self.biogas_chp_efficiency_el
+                    * (1.0 - self.biogas_parasitic_fraction)
+                    == v["p_chp_net"][t] * dt
+                )
+
+                # ---------------------------------------------
+                # Produção contínua agregada de biogás
+                # ---------------------------------------------
+                biogas_prod = (
+                    self.biogas_production_nm3_hour
+                    * dt
+                )
+
+                # ---------------------------------------------
+                # Dinâmica do gasômetro
+                # ---------------------------------------------
+                if t == 0:
+                    solver.Add(
+                        v["biogas_level"][t]
+                        == init_dispatchable_state
+                        + biogas_prod
+                        - v["biogas_use"][t]
+                    )
+                else:
+                    solver.Add(
+                        v["biogas_level"][t]
+                        == v["biogas_level"][t - 1]
+                        + biogas_prod
+                        - v["biogas_use"][t]
+                    )
+
         # =====================================================
         # RESTRICOES GLOBAIS POR ROTA
         # =====================================================
@@ -823,6 +1138,18 @@ class MILPDispatchOptimizer:
             # A condicao terminal ciclica nao e aplicada aqui.
             # Ela deve ser imposta somente no fim do horizonte
             # anual, e nao em cada bloco do rolling horizon.
+
+        elif self.route == "biogas":
+            # Não existe entrega externa em B2.
+            # O recurso entra exclusivamente pela produção
+            # contínua derivada do substrato.
+
+            if terminal_dispatchable_target is not None:
+                solver.Add(
+                    v["biogas_level"][T - 1]
+                    == terminal_dispatchable_target
+                )
+
     # ---------------------------------------------------------
 
     def _set_objective(self, solver: pywraplp.Solver, v: dict[str, object], df: pd.DataFrame) -> None:
@@ -862,6 +1189,23 @@ class MILPDispatchOptimizer:
                     v["p_chp"][t],
                     self.chp_variable_cost_usd_kwh * dt,
                 )
+
+            elif self.route == "biogas":
+                # OPEX CHP foi consolidado em USD/kWh bruto.
+                # Como p_chp_net é líquido:
+                #
+                # E_gross = E_net / (1 - parasitic)
+                #
+                gross_cost_per_net_kwh = (
+                    self.biogas_chp_variable_cost_usd_kwh_gross
+                    / (1.0 - self.biogas_parasitic_fraction)
+                )
+
+                objective.SetCoefficient(
+                    v["p_chp_net"][t],
+                    gross_cost_per_net_kwh * dt,
+                )
+
             objective.SetCoefficient(v["p_bat_dis"][t], self.battery_discharge_penalty_usd_kwh * dt)
             objective.SetCoefficient(v["unserved"][t], self.unserved_penalty_usd_kwh * dt)
 
@@ -892,6 +1236,7 @@ class MILPDispatchOptimizer:
         init_dispatchable_state: float,
         prev_peak: float = 0,
         prev_monthly_peak: float = 0.0,
+        terminal_dispatchable_target: float | None = None,
     ) -> DispatchResult:
         solver = self._build_solver()
         v = self._create_variables(solver, len(df))
@@ -904,6 +1249,7 @@ class MILPDispatchOptimizer:
             init_dispatchable_state,
             prev_peak,
             prev_monthly_peak,
+            terminal_dispatchable_target,
         )
         self._set_objective(solver, v, df)
 
@@ -918,9 +1264,17 @@ class MILPDispatchOptimizer:
             if self.route == "hydrogen":
                 final_h2_kg = init_dispatchable_state
                 final_biomethane_nm3 = 0.0
-            else:
+                final_biogas_nm3 = 0.0
+
+            elif self.route == "biomethane":
                 final_h2_kg = 0.0
                 final_biomethane_nm3 = init_dispatchable_state
+                final_biogas_nm3 = 0.0
+
+            else:  # biogas
+                final_h2_kg = 0.0
+                final_biomethane_nm3 = 0.0
+                final_biogas_nm3 = init_dispatchable_state
 
             return DispatchResult(
                 dispatch_df=pd.DataFrame(),
@@ -931,6 +1285,7 @@ class MILPDispatchOptimizer:
                 solve_time_sec=solve_time_sec,
                 milp_gap=None,
                 final_biomethane_nm3=final_biomethane_nm3,
+                final_biogas_nm3=final_biogas_nm3,
             )
 
         rows: list[dict[str, float | int]] = []
@@ -1009,6 +1364,41 @@ class MILPDispatchOptimizer:
                     }
                 )
 
+            elif self.route == "biogas":
+                p_net = float(
+                    v["p_chp_net"][t].solution_value()
+                )
+
+                p_gross_equiv = (
+                    p_net
+                    / (1.0 - self.biogas_parasitic_fraction)
+                )
+
+                row.update(
+                    {
+                        "p_chp_net_kw": p_net,
+                        "p_chp_gross_equiv_kw": p_gross_equiv,
+                        "p_biogas_aux_kw": (
+                            p_gross_equiv - p_net
+                        ),
+                        "u_chp_on": int(
+                            round(
+                                v["u_chp_on"][t].solution_value()
+                            )
+                        ),
+                        "biogas_production_nm3": (
+                            self.biogas_production_nm3_hour
+                            * self.timestep_hours
+                        ),
+                        "biogas_use_nm3": float(
+                            v["biogas_use"][t].solution_value()
+                        ),
+                        "biogas_level_nm3": float(
+                            v["biogas_level"][t].solution_value()
+                        ),
+                    }
+                )
+
             rows.append(row)
 
         final_battery_kwh = float(
@@ -1020,11 +1410,20 @@ class MILPDispatchOptimizer:
                 v["h2"][len(df) - 1].solution_value()
             )
             final_biomethane_nm3 = 0.0
+            final_biogas_nm3 = 0.0
 
-        else:
+        elif self.route == "biomethane":
             final_h2_kg = 0.0
             final_biomethane_nm3 = float(
                 v["biomethane_level"][len(df) - 1].solution_value()
+            )
+            final_biogas_nm3 = 0.0
+
+        else:  # biogas
+            final_h2_kg = 0.0
+            final_biomethane_nm3 = 0.0
+            final_biogas_nm3 = float(
+                v["biogas_level"][len(df) - 1].solution_value()
             )
 
         return DispatchResult(
@@ -1038,6 +1437,7 @@ class MILPDispatchOptimizer:
             solve_time_sec=solve_time_sec,
             milp_gap=None,
             final_biomethane_nm3=final_biomethane_nm3,
+            final_biogas_nm3=final_biogas_nm3,
         )
     # ---------------------------------------------------------
 
@@ -1075,7 +1475,32 @@ class MILPDispatchOptimizer:
         self,
         df: pd.DataFrame,
         period_hours: int = 168,
+        commit_hours: int | None = None,
+        lookahead_hours: int = 0,
     ) -> DispatchResult:
+
+        # -----------------------------------------------------
+        # OPTIONAL LOOK-AHEAD MODE — M2
+        #
+        # Backward compatibility:
+        # commit_hours=None and lookahead_hours=0 execute the
+        # historical rolling-horizon implementation unchanged.
+        # -----------------------------------------------------
+        if (
+            commit_hours is not None
+            or lookahead_hours != 0
+        ):
+            effective_commit_hours = (
+                period_hours
+                if commit_hours is None
+                else int(commit_hours)
+            )
+
+            return self._run_annual_simulation_lookahead(
+                df=df,
+                commit_hours=effective_commit_hours,
+                lookahead_hours=int(lookahead_hours),
+            )
 
         if period_hours <= 0:
             raise ValueError("period_hours must be > 0")
@@ -1115,6 +1540,14 @@ class MILPDispatchOptimizer:
                 * self.biomethane_soc_init_fraction
             )
 
+        elif self.route == "biogas":
+            dispatchable_state = (
+                self.biogas_storage_nm3
+                * self.biogas_soc_init_fraction
+            )
+
+        annual_initial_dispatchable_state = dispatchable_state
+
         peak = 0.0
 
         # Monthly demand-charge state (M1b)
@@ -1145,12 +1578,24 @@ class MILPDispatchOptimizer:
                     current_billing_month = start_month
                     monthly_peak = 0.0
 
+            terminal_target = None
+
+            if (
+                self.route == "biogas"
+                and self.biogas_terminal_cyclic
+                and i + len(part) == len(df)
+            ):
+                terminal_target = (
+                    annual_initial_dispatchable_state
+                )
+
             result = self.solve_period(
                 part,
                 bat,
                 dispatchable_state,
                 peak,
                 monthly_peak,
+                terminal_target,
             )
 
             total_solve_time += result.solve_time_sec
@@ -1163,9 +1608,17 @@ class MILPDispatchOptimizer:
                 if self.route == "hydrogen":
                     final_h2_kg = dispatchable_state
                     final_biomethane_nm3 = 0.0
-                else:
+                    final_biogas_nm3 = 0.0
+
+                elif self.route == "biomethane":
                     final_h2_kg = 0.0
                     final_biomethane_nm3 = dispatchable_state
+                    final_biogas_nm3 = 0.0
+
+                else:  # biogas
+                    final_h2_kg = 0.0
+                    final_biomethane_nm3 = 0.0
+                    final_biogas_nm3 = dispatchable_state
 
                 return DispatchResult(
                     dispatch_df=pd.DataFrame(),
@@ -1176,6 +1629,7 @@ class MILPDispatchOptimizer:
                     solve_time_sec=total_solve_time,
                     milp_gap=None,
                     final_biomethane_nm3=final_biomethane_nm3,
+                    final_biogas_nm3=final_biogas_nm3,
                 )
 
             # -------------------------------------------------
@@ -1209,6 +1663,11 @@ class MILPDispatchOptimizer:
                     result.final_biomethane_nm3
                 )
 
+            elif self.route == "biogas":
+                dispatchable_state = (
+                    result.final_biogas_nm3
+                )
+
             total_objective += result.objective_value
             out.append(result.dispatch_df)
 
@@ -1218,10 +1677,17 @@ class MILPDispatchOptimizer:
         if self.route == "hydrogen":
             final_h2_kg = dispatchable_state
             final_biomethane_nm3 = 0.0
+            final_biogas_nm3 = 0.0
 
-        else:
+        elif self.route == "biomethane":
             final_h2_kg = 0.0
             final_biomethane_nm3 = dispatchable_state
+            final_biogas_nm3 = 0.0
+
+        else:  # biogas
+            final_h2_kg = 0.0
+            final_biomethane_nm3 = 0.0
+            final_biogas_nm3 = dispatchable_state
 
         return DispatchResult(
             dispatch_df=pd.concat(
@@ -1235,4 +1701,5 @@ class MILPDispatchOptimizer:
             solve_time_sec=total_solve_time,
             milp_gap=None,
             final_biomethane_nm3=final_biomethane_nm3,
+            final_biogas_nm3=final_biogas_nm3,
         )
