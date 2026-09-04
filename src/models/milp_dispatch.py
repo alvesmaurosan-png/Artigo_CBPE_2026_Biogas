@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
@@ -238,7 +238,7 @@ class MILPDispatchOptimizer:
             chp_bg_cfg = self.config["technology"]["chp_biogas"]
 
             # -----------------------------------------------------
-            # Produção agregada de biogás
+            # ProduÃ§Ã£o agregada de biogÃ¡s
             # -----------------------------------------------------
             self.biogas_substrate_t_day = float(
                 bg_cfg["substrate_t_day"]
@@ -294,7 +294,7 @@ class MILPDispatchOptimizer:
             )
 
             # -----------------------------------------------------
-            # Gasômetro
+            # GasÃ´metro
             # -----------------------------------------------------
             self.biogas_soc_init_fraction = float(
                 bg_storage_cfg["soc_init_fraction"]
@@ -346,8 +346,8 @@ class MILPDispatchOptimizer:
                 chp_bg_cfg["min_load_fraction"]
             )
 
-            # Valor consolidado, mas sua tradução temporal ainda
-            # NÃO é aplicada como derating contínuo.
+            # Valor consolidado, mas sua traduÃ§Ã£o temporal ainda
+            # NÃƒO Ã© aplicada como derating contÃ­nuo.
             self.biogas_chp_availability_fraction = float(
                 chp_bg_cfg.get("availability_fraction", 1.0)
             )
@@ -385,7 +385,7 @@ class MILPDispatchOptimizer:
         self.peak_end = int(tariff["peak_window"]["end_hour"])
 
         # ---------------------------------------------------------
-        # DEMAND CHARGE — M1b
+        # DEMAND CHARGE â€” M1b
         # Disabled by default to preserve M0 behavior.
         # ---------------------------------------------------------
         self.include_demand_charge = bool(
@@ -694,10 +694,10 @@ class MILPDispatchOptimizer:
             )
 
         # -----------------------------------------------------
-        # MONTHLY DEMAND PEAK — M1b
+        # MONTHLY DEMAND PEAK â€” M1b
         # -----------------------------------------------------
         # -----------------------------------------------------
-        # Rota biogas — B2
+        # Rota biogas â€” B2
         # -----------------------------------------------------
         elif self.route == "biogas":
             biogas_level_min = (
@@ -711,7 +711,7 @@ class MILPDispatchOptimizer:
 
             variables.update(
                 {
-                    # Potência elétrica líquida entregue pela
+                    # PotÃªncia elÃ©trica lÃ­quida entregue pela
                     # rota B2 ao barramento da microrrede.
                     "p_chp_net": [
                         solver.NumVar(
@@ -730,7 +730,7 @@ class MILPDispatchOptimizer:
                         for t in range(T)
                     ],
 
-                    # Consumo horário de biogás.
+                    # Consumo horÃ¡rio de biogÃ¡s.
                     "biogas_use": [
                         solver.NumVar(
                             0,
@@ -740,7 +740,7 @@ class MILPDispatchOptimizer:
                         for t in range(T)
                     ],
 
-                    # Estoque no gasômetro limitado diretamente
+                    # Estoque no gasÃ´metro limitado diretamente
                     # entre SOCmin e SOCmax.
                     "biogas_level": [
                         solver.NumVar(
@@ -1020,14 +1020,14 @@ class MILPDispatchOptimizer:
                 )
 
             # =================================================
-            # ROTA BIOGAS — B2
+            # ROTA BIOGAS â€” B2
             # =================================================
             elif self.route == "biogas":
 
                 # ---------------------------------------------
-                # CHP ligado/desligado + carga mínima
+                # CHP ligado/desligado + carga mÃ­nima
                 #
-                # chp_kw representa potência elétrica líquida
+                # chp_kw representa potÃªncia elÃ©trica lÃ­quida
                 # da rota B2 entregue ao barramento.
                 # ---------------------------------------------
                 solver.Add(
@@ -1044,14 +1044,14 @@ class MILPDispatchOptimizer:
                 )
 
                 # ---------------------------------------------
-                # Biogás -> eletricidade líquida
+                # BiogÃ¡s -> eletricidade lÃ­quida
                 #
                 # E_net =
                 # V_BG * PCI_BG * eta_el * (1 - parasitic)
                 #
-                # Esta equação reproduz a convenção consolidada
+                # Esta equaÃ§Ã£o reproduz a convenÃ§Ã£o consolidada
                 # da planilha B2-2026:
-                # 196,812 kWh/t bruto -> 177,1308 kWh/t líquido.
+                # 196,812 kWh/t bruto -> 177,1308 kWh/t lÃ­quido.
                 # ---------------------------------------------
                 solver.Add(
                     v["biogas_use"][t]
@@ -1062,7 +1062,7 @@ class MILPDispatchOptimizer:
                 )
 
                 # ---------------------------------------------
-                # Produção contínua agregada de biogás
+                # ProduÃ§Ã£o contÃ­nua agregada de biogÃ¡s
                 # ---------------------------------------------
                 biogas_prod = (
                     self.biogas_production_nm3_hour
@@ -1070,7 +1070,7 @@ class MILPDispatchOptimizer:
                 )
 
                 # ---------------------------------------------
-                # Dinâmica do gasômetro
+                # DinÃ¢mica do gasÃ´metro
                 # ---------------------------------------------
                 if t == 0:
                     solver.Add(
@@ -1140,9 +1140,9 @@ class MILPDispatchOptimizer:
             # anual, e nao em cada bloco do rolling horizon.
 
         elif self.route == "biogas":
-            # Não existe entrega externa em B2.
-            # O recurso entra exclusivamente pela produção
-            # contínua derivada do substrato.
+            # NÃ£o existe entrega externa em B2.
+            # O recurso entra exclusivamente pela produÃ§Ã£o
+            # contÃ­nua derivada do substrato.
 
             if terminal_dispatchable_target is not None:
                 solver.Add(
@@ -1192,7 +1192,7 @@ class MILPDispatchOptimizer:
 
             elif self.route == "biogas":
                 # OPEX CHP foi consolidado em USD/kWh bruto.
-                # Como p_chp_net é líquido:
+                # Como p_chp_net Ã© lÃ­quido:
                 #
                 # E_gross = E_net / (1 - parasitic)
                 #
@@ -1480,7 +1480,7 @@ class MILPDispatchOptimizer:
     ) -> DispatchResult:
 
         # -----------------------------------------------------
-        # OPTIONAL LOOK-AHEAD MODE — M2
+        # OPTIONAL LOOK-AHEAD MODE â€” M2
         #
         # Backward compatibility:
         # commit_hours=None and lookahead_hours=0 execute the
@@ -1703,3 +1703,416 @@ class MILPDispatchOptimizer:
             final_biomethane_nm3=final_biomethane_nm3,
             final_biogas_nm3=final_biogas_nm3,
         )
+    def _run_annual_simulation_lookahead(
+        self,
+        df: pd.DataFrame,
+        commit_hours: int,
+        lookahead_hours: int,
+    ) -> DispatchResult:
+        """
+        Annual receding-horizon simulation with optional look-ahead.
+
+        At each iteration, the optimizer solves:
+
+            commit_hours + lookahead_hours
+
+        but only the first ``commit_hours`` are committed to the
+        annual dispatch. The look-ahead portion is discarded and
+        re-optimized at the next iteration.
+
+        State propagation therefore uses the state at the end of
+        the committed interval, not the state at the end of the
+        complete optimization window.
+
+        This method is intentionally separate from the historical
+        ``run_annual_simulation`` implementation so that the legacy
+        rolling-horizon behavior remains unchanged.
+        """
+
+        # -----------------------------------------------------
+        # VALIDATION
+        # -----------------------------------------------------
+        if commit_hours <= 0:
+            raise ValueError("commit_hours must be > 0")
+
+        if lookahead_hours < 0:
+            raise ValueError("lookahead_hours must be >= 0")
+
+        if len(df) == 0:
+            raise ValueError("df must not be empty")
+
+        if "hour" not in df.columns:
+            raise ValueError("df must contain column 'hour'")
+
+        # -----------------------------------------------------
+        # INITIAL BATTERY STATE
+        # -----------------------------------------------------
+        bat = (
+            self.usable_battery_kwh
+            * self.battery_soc_init_fraction
+        )
+
+        # -----------------------------------------------------
+        # INITIAL DISPATCHABLE STATE
+        # -----------------------------------------------------
+        if self.route == "hydrogen":
+            dispatchable_state = (
+                self.h2_tank_kg
+                * self.h2_soc_init_fraction
+            )
+
+        elif self.route == "biomethane":
+            dispatchable_state = (
+                self.biomethane_storage_nm3
+                * self.biomethane_soc_init_fraction
+            )
+
+        elif self.route == "biogas":
+            dispatchable_state = (
+                self.biogas_storage_nm3
+                * self.biogas_soc_init_fraction
+            )
+
+        else:
+            raise ValueError(
+                f"Unsupported system.route: {self.route!r}"
+            )
+
+        annual_initial_dispatchable_state = (
+            dispatchable_state
+        )
+
+        # -----------------------------------------------------
+        # ACCUMULATORS
+        # -----------------------------------------------------
+        out: list[pd.DataFrame] = []
+
+        total_objective = 0.0
+        total_solve_time = 0.0
+
+        peak = 0.0
+        monthly_peak = 0.0
+        current_billing_month: int | None = None
+
+        n_hours = len(df)
+
+        # -----------------------------------------------------
+        # RECEDING HORIZON
+        # -----------------------------------------------------
+        for start in range(
+            0,
+            n_hours,
+            commit_hours,
+        ):
+            commit_end = min(
+                start + commit_hours,
+                n_hours,
+            )
+
+            optimization_end = min(
+                commit_end + lookahead_hours,
+                n_hours,
+            )
+
+            # -------------------------------------------------
+            # M1b MONTH-BOUNDARY CLIPPING
+            #
+            # solve_period() currently contains only one
+            # P_peak_month variable. Therefore a single
+            # optimization window must not contain hours from
+            # two different billing months.
+            #
+            # The committed interval remains unchanged. Only
+            # the optional look-ahead is shortened when it
+            # would cross a billing-month boundary.
+            # -------------------------------------------------
+            if (
+                self.demand_charge_in_milp_objective
+                and optimization_end > commit_end
+            ):
+                commit_month = (
+                    self._billing_month_from_global_hour(
+                        start
+                    )
+                )
+
+                clipped_end = optimization_end
+
+                for global_hour in range(
+                    commit_end,
+                    optimization_end,
+                ):
+                    lookahead_month = (
+                        self._billing_month_from_global_hour(
+                            global_hour
+                        )
+                    )
+
+                    if lookahead_month != commit_month:
+                        clipped_end = global_hour
+                        break
+
+                optimization_end = clipped_end
+
+            # -------------------------------------------------
+            # Optimization window
+            # -------------------------------------------------
+            part = df.iloc[
+                start:optimization_end
+            ].copy()
+
+            part["t_global"] = range(
+                start,
+                optimization_end,
+            )
+
+            committed_length = (
+                commit_end - start
+            )
+
+            # -------------------------------------------------
+            # BILLING MONTH â€” M1b
+            #
+            # The committed interval determines the billing
+            # state that is propagated.
+            # -------------------------------------------------
+            if self.demand_charge_in_milp_objective:
+                start_month = (
+                    self._billing_month_from_global_hour(
+                        start
+                    )
+                )
+
+                commit_end_month = (
+                    self._billing_month_from_global_hour(
+                        commit_end - 1
+                    )
+                )
+
+                if start_month != commit_end_month:
+                    raise ValueError(
+                        "A committed rolling-horizon block "
+                        "crosses a billing-month boundary. "
+                        "Use commit_hours aligned with billing days."
+                    )
+
+                if current_billing_month != start_month:
+                    current_billing_month = start_month
+                    monthly_peak = 0.0
+
+            # -------------------------------------------------
+            # TERMINAL TARGET
+            #
+            # Only impose the annual cyclic dispatchable-state
+            # target when the optimization window actually
+            # reaches the end of the annual horizon.
+            # -------------------------------------------------
+            terminal_target = None
+
+            if (
+                self.route in {"biomethane", "biogas"}
+                and optimization_end == n_hours
+            ):
+                terminal_target = (
+                    annual_initial_dispatchable_state
+                )
+
+            # -------------------------------------------------
+            # SOLVE COMPLETE COMMIT + LOOK-AHEAD WINDOW
+            # -------------------------------------------------
+            result = self.solve_period(
+                part,
+                bat,
+                dispatchable_state,
+                peak,
+                monthly_peak,
+                terminal_target,
+            )
+
+            total_solve_time += (
+                result.solve_time_sec
+            )
+
+            # -------------------------------------------------
+            # INFEASIBLE / EMPTY RESULT
+            # -------------------------------------------------
+            if result.dispatch_df.empty:
+
+                if self.route == "hydrogen":
+                    final_h2_kg = (
+                        dispatchable_state
+                    )
+                    final_biomethane_nm3 = 0.0
+                    final_biogas_nm3 = 0.0
+
+                elif self.route == "biomethane":
+                    final_h2_kg = 0.0
+                    final_biomethane_nm3 = (
+                        dispatchable_state
+                    )
+                    final_biogas_nm3 = 0.0
+
+                else:  # biogas
+                    final_h2_kg = 0.0
+                    final_biomethane_nm3 = 0.0
+                    final_biogas_nm3 = (
+                        dispatchable_state
+                    )
+
+                return DispatchResult(
+                    dispatch_df=pd.DataFrame(),
+                    final_battery_kwh=bat,
+                    final_h2_kg=final_h2_kg,
+                    objective_value=total_objective,
+                    solver_status=result.solver_status,
+                    solve_time_sec=total_solve_time,
+                    milp_gap=None,
+                    final_biomethane_nm3=(
+                        final_biomethane_nm3
+                    ),
+                    final_biogas_nm3=(
+                        final_biogas_nm3
+                    ),
+                )
+
+            # -------------------------------------------------
+            # KEEP ONLY COMMITTED HOURS
+            # -------------------------------------------------
+            committed = (
+                result.dispatch_df
+                .iloc[:committed_length]
+                .copy()
+            )
+
+            if len(committed) != committed_length:
+                raise RuntimeError(
+                    "Solver returned fewer rows than the "
+                    "requested committed interval."
+                )
+
+            # -------------------------------------------------
+            # GRID PEAK PROPAGATION
+            #
+            # Only realized/committed dispatch may update the
+            # historical annual and monthly peaks.
+            # -------------------------------------------------
+            block_grid_peak = float(
+                committed["p_grid_kw"].max()
+            )
+
+            peak = max(
+                peak,
+                block_grid_peak,
+            )
+
+            if self.demand_charge_in_milp_objective:
+                monthly_peak = max(
+                    monthly_peak,
+                    block_grid_peak,
+                )
+
+            # -------------------------------------------------
+            # PROPAGATE BATTERY STATE AT END OF COMMIT
+            # -------------------------------------------------
+            bat = float(
+                committed.iloc[-1][
+                    "soc_bat_kwh"
+                ]
+            )
+
+            # -------------------------------------------------
+            # PROPAGATE DISPATCHABLE STATE AT END OF COMMIT
+            # -------------------------------------------------
+            if self.route == "hydrogen":
+                dispatchable_state = float(
+                    committed.iloc[-1][
+                        "h2_level_kg"
+                    ]
+                )
+
+            elif self.route == "biomethane":
+                dispatchable_state = float(
+                    committed.iloc[-1][
+                        "biomethane_level_nm3"
+                    ]
+                )
+
+            elif self.route == "biogas":
+                dispatchable_state = float(
+                    committed.iloc[-1][
+                        "biogas_level_nm3"
+                    ]
+                )
+
+            # -------------------------------------------------
+            # OBJECTIVE ACCOUNTING
+            #
+            # The optimization objective contains look-ahead
+            # costs and therefore must not be accumulated
+            # directly as realized annual cost.
+            #
+            # Keep this accumulator neutral in M2. Economic
+            # replay must be calculated ex post from committed
+            # dispatch only.
+            # -------------------------------------------------
+            total_objective += 0.0
+
+            # -------------------------------------------------
+            # STORE ONLY REALIZED / COMMITTED DISPATCH
+            # -------------------------------------------------
+            out.append(committed)
+
+        # -----------------------------------------------------
+        # FINAL ROUTE STATE
+        # -----------------------------------------------------
+        if self.route == "hydrogen":
+            final_h2_kg = dispatchable_state
+            final_biomethane_nm3 = 0.0
+            final_biogas_nm3 = 0.0
+
+        elif self.route == "biomethane":
+            final_h2_kg = 0.0
+            final_biomethane_nm3 = (
+                dispatchable_state
+            )
+            final_biogas_nm3 = 0.0
+
+        else:  # biogas
+            final_h2_kg = 0.0
+            final_biomethane_nm3 = 0.0
+            final_biogas_nm3 = (
+                dispatchable_state
+            )
+
+        dispatch_df = pd.concat(
+            out,
+            ignore_index=True,
+        )
+
+        # -----------------------------------------------------
+        # ANNUAL OUTPUT INTEGRITY
+        # -----------------------------------------------------
+        if len(dispatch_df) != n_hours:
+            raise RuntimeError(
+                "Look-ahead annual simulation produced "
+                f"{len(dispatch_df)} committed rows; "
+                f"expected {n_hours}."
+            )
+
+        return DispatchResult(
+            dispatch_df=dispatch_df,
+            final_battery_kwh=bat,
+            final_h2_kg=final_h2_kg,
+            objective_value=total_objective,
+            solver_status="OPTIMAL",
+            solve_time_sec=total_solve_time,
+            milp_gap=None,
+            final_biomethane_nm3=(
+                final_biomethane_nm3
+            ),
+            final_biogas_nm3=(
+                final_biogas_nm3
+            ),
+        )
+
+
