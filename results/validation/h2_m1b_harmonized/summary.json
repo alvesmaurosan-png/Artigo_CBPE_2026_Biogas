@@ -1,0 +1,16 @@
+{
+  "demand_charge_usd_kw_month": 30.0,
+  "annualized_capex_usd": 246189.01099061375,
+  "fixed_opex_usd": 38763.4,
+  "variable_h2_opex_usd": 11863.383683771475,
+  "grid_energy_cost_usd": 143437.47107825364,
+  "annual_demand_charge_usd": 117609.26954731063,
+  "annual_cost_historical_usd": 440253.26575263886,
+  "annual_cost_harmonized_usd": 557862.5352999495,
+  "energy_served_kwh": 2268096.0450061434,
+  "lcoe_historical_usd_kwh": 0.19410697651979125,
+  "lcoe_harmonized_usd_kwh": 0.24596071957721632,
+  "lcoe_increase_absolute": 0.05185374305742507,
+  "lcoe_increase_percent": 26.714002756175038,
+  "annual_pgrid_peak_kw": 351.2476001141024
+}

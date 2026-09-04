@@ -226,6 +226,25 @@ class MILPDispatchOptimizer:
         self.peak_end = int(tariff["peak_window"]["end_hour"])
 
         # ---------------------------------------------------------
+        # DEMAND CHARGE — M1b
+        # Disabled by default to preserve M0 behavior.
+        # ---------------------------------------------------------
+        self.include_demand_charge = bool(
+            tariff.get("include_demand_charge", False)
+        )
+        self.demand_charge_usd_kw_month = float(
+            tariff.get("demand_charge_usd_kw_month", 0.0)
+        )
+        self.demand_charge_in_milp_objective = bool(
+            tariff.get("demand_charge_in_milp_objective", False)
+        )
+
+        if self.demand_charge_usd_kw_month < 0:
+            raise ValueError(
+                "tariff.demand_charge_usd_kw_month must be >= 0"
+            )
+
+        # ---------------------------------------------------------
         # GRID
         # ---------------------------------------------------------
         self.grid_power_max_kw = float(
@@ -496,6 +515,21 @@ class MILPDispatchOptimizer:
                 }
             )
 
+        # -----------------------------------------------------
+        # MONTHLY DEMAND PEAK — M1b
+        # -----------------------------------------------------
+        if self.demand_charge_in_milp_objective:
+            variables["P_peak_month"] = solver.NumVar(
+                0,
+                self.grid_power_max_kw,
+                "P_peak_month",
+            )
+            variables["P_demand_increment"] = solver.NumVar(
+                0,
+                self.grid_power_max_kw,
+                "P_demand_increment",
+            )
+
         return variables
     # ---------------------------------------------------------
 
@@ -507,9 +541,19 @@ class MILPDispatchOptimizer:
             init_bat: float,
             init_dispatchable_state: float,
             prev_peak: float,
+            prev_monthly_peak: float = 0.0,
     ) -> None:
 
         solver.Add(v["P_peak"] >= prev_peak)
+
+        if self.demand_charge_in_milp_objective:
+            solver.Add(
+                v["P_peak_month"] >= prev_monthly_peak
+            )
+            solver.Add(
+                v["P_demand_increment"]
+                >= v["P_peak_month"] - prev_monthly_peak
+            )
 
         dt = self.timestep_hours
         T = len(df)
@@ -569,6 +613,11 @@ class MILPDispatchOptimizer:
             # Grid
             # -------------------------------------------------
             solver.Add(v["p_grid"][t] <= v["P_peak"])
+
+            if self.demand_charge_in_milp_objective:
+                solver.Add(
+                    v["p_grid"][t] <= v["P_peak_month"]
+                )
 
             if self._is_blackout_hour(global_hour, local_hour):
                 solver.Add(v["p_grid"][t] == 0)
@@ -817,7 +866,20 @@ class MILPDispatchOptimizer:
             objective.SetCoefficient(v["unserved"][t], self.unserved_penalty_usd_kwh * dt)
 
         if self.global_peak_penalty_weight > 0:
-            objective.SetCoefficient(v["P_peak"], self.global_peak_penalty_weight)
+            objective.SetCoefficient(
+                v["P_peak"],
+                self.global_peak_penalty_weight,
+            )
+
+        if (
+            self.demand_charge_in_milp_objective
+            and self.include_demand_charge
+            and self.demand_charge_usd_kw_month > 0
+        ):
+            objective.SetCoefficient(
+                v["P_demand_increment"],
+                self.demand_charge_usd_kw_month,
+            )
 
         objective.SetMinimization()
 
@@ -829,6 +891,7 @@ class MILPDispatchOptimizer:
         init_bat: float,
         init_dispatchable_state: float,
         prev_peak: float = 0,
+        prev_monthly_peak: float = 0.0,
     ) -> DispatchResult:
         solver = self._build_solver()
         v = self._create_variables(solver, len(df))
@@ -840,6 +903,7 @@ class MILPDispatchOptimizer:
             init_bat,
             init_dispatchable_state,
             prev_peak,
+            prev_monthly_peak,
         )
         self._set_objective(solver, v, df)
 
@@ -977,6 +1041,36 @@ class MILPDispatchOptimizer:
         )
     # ---------------------------------------------------------
 
+    @staticmethod
+    def _billing_month_from_global_hour(global_hour: int) -> int:
+        """
+        Return billing month 1..12 for the 8760-hour 2026 baseline.
+        """
+        month_hours = (
+            31 * 24,
+            28 * 24,
+            31 * 24,
+            30 * 24,
+            31 * 24,
+            30 * 24,
+            31 * 24,
+            31 * 24,
+            30 * 24,
+            31 * 24,
+            30 * 24,
+            31 * 24,
+        )
+
+        cumulative = 0
+        for month, hours in enumerate(month_hours, start=1):
+            cumulative += hours
+            if global_hour < cumulative:
+                return month
+
+        raise ValueError(
+            f"global_hour outside 8760-hour baseline: {global_hour}"
+        )
+
     def run_annual_simulation(
         self,
         df: pd.DataFrame,
@@ -1022,6 +1116,11 @@ class MILPDispatchOptimizer:
             )
 
         peak = 0.0
+
+        # Monthly demand-charge state (M1b)
+        monthly_peak = 0.0
+        current_billing_month: int | None = None
+
         out: list[pd.DataFrame] = []
         total_objective = 0.0
         total_solve_time = 0.0
@@ -1030,11 +1129,28 @@ class MILPDispatchOptimizer:
             part = df.iloc[i : i + period_hours].copy()
             part["t_global"] = range(i, i + len(part))
 
+            if self.demand_charge_in_milp_objective:
+                start_month = self._billing_month_from_global_hour(i)
+                end_month = self._billing_month_from_global_hour(
+                    i + len(part) - 1
+                )
+
+                if start_month != end_month:
+                    raise ValueError(
+                        "A rolling-horizon block crosses a billing-month "
+                        "boundary. Use period_hours aligned with billing days."
+                    )
+
+                if current_billing_month != start_month:
+                    current_billing_month = start_month
+                    monthly_peak = 0.0
+
             result = self.solve_period(
                 part,
                 bat,
                 dispatchable_state,
                 peak,
+                monthly_peak,
             )
 
             total_solve_time += result.solve_time_sec
@@ -1065,10 +1181,20 @@ class MILPDispatchOptimizer:
             # -------------------------------------------------
             # Atualizacao dos estados comuns
             # -------------------------------------------------
+            block_grid_peak = float(
+                result.dispatch_df["p_grid_kw"].max()
+            )
+
             peak = max(
                 peak,
-                float(result.dispatch_df["p_grid_kw"].max()),
+                block_grid_peak,
             )
+
+            if self.demand_charge_in_milp_objective:
+                monthly_peak = max(
+                    monthly_peak,
+                    block_grid_peak,
+                )
 
             bat = result.final_battery_kwh
 
