@@ -1,0 +1,42 @@
+{
+  "capacities": {
+    "pv_kw": 990.0,
+    "bsv_kwh": 1241.0,
+    "electrolyzer_kw": 441.0,
+    "h2_tank_kg": 200.0,
+    "fuelcell_kw": 117.0
+  },
+  "reference": {
+    "P_peak_grid_opt_kw": 351.2476001141024,
+    "lcoe_usd_kwh": 0.1940992206737364,
+    "capex_total_usd": 2417120.0,
+    "annualized_capex_usd": 246189.010991,
+    "fixed_opex_annual_usd": 38763.4,
+    "E_grid_total_kwh": 955761.963848,
+    "total_grid_dependency_ratio": 0.421394
+  },
+  "calculated": {
+    "P_peak_grid_opt_kw": 351.2476001141024,
+    "lcoe_usd_kwh": 0.19409922067373647,
+    "capex_total_usd": 2417120.0,
+    "annualized_capex_usd": 246189.01099061375,
+    "fixed_opex_annual_usd": 38763.4,
+    "grid_opex_annual_usd": 143419.8800744911,
+    "grid_peak_opex_annual_usd": 79.40785326847441,
+    "E_grid_total_kwh": 955761.9638480212,
+    "E_load_total_kwh": 2268096.0450061434,
+    "total_grid_dependency_ratio": 0.42139395549513975,
+    "unserved_energy_kwh": 0.0,
+    "final_battery_kwh": 79.42400000000002,
+    "final_h2_kg": 32.24444054272914
+  },
+  "delta": {
+    "P_peak_grid_opt_kw": 0.0,
+    "lcoe_usd_kwh": 8.326672684688674e-17,
+    "capex_total_usd": 0.0,
+    "annualized_capex_usd": -3.86236933991313e-07,
+    "fixed_opex_annual_usd": 0.0,
+    "E_grid_total_kwh": 2.1187588572502136e-08,
+    "total_grid_dependency_ratio": -4.450486024154543e-08
+  }
+}
