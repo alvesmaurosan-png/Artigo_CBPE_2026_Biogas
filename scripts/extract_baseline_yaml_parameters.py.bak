@@ -1,0 +1,803 @@
+from pathlib import Path
+import pandas as pd
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+CONFIG_DIR = ROOT / "configs" / "paper"
+
+# ------------------------------------------------------------
+# AJUSTE SOMENTE ESTE NOME SE O YAML H2 TIVER OUTRO NOME
+# ------------------------------------------------------------
+
+H2_CONFIG = CONFIG_DIR / "pv_bsv_h2_1500.yaml"
+
+B1_CONFIG = (
+    CONFIG_DIR
+    / "pv_bsv_biomethane_1500.yaml"
+)
+
+OUT_DIR = (
+    ROOT
+    / "results"
+    / "paper"
+    / "source_data"
+)
+
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+OUT_CSV = (
+    OUT_DIR
+    / "baseline_2026_yaml_parameters_extracted.csv"
+)
+
+OUT_TXT = (
+    OUT_DIR
+    / "baseline_2026_yaml_parameters_extracted.txt"
+)
+
+
+def load_yaml(path: Path):
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Config not found: {path}"
+        )
+
+    with open(
+        path,
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return yaml.safe_load(f)
+
+
+h2 = load_yaml(H2_CONFIG)
+b1 = load_yaml(B1_CONFIG)
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def get_nested(data, path, default=None):
+
+    current = data
+
+    for key in path.split("."):
+        if not isinstance(current, dict):
+            return default
+
+        if key not in current:
+            return default
+
+        current = current[key]
+
+    return current
+
+
+def add(
+    rows,
+    id_,
+    group,
+    route,
+    parameter,
+    symbol,
+    unit,
+    yaml_path,
+    source_dict,
+    status="A - Consolidado 2026",
+    notes="",
+):
+
+    value = get_nested(
+        source_dict,
+        yaml_path,
+        default=None,
+    )
+
+    rows.append({
+        "id": id_,
+        "group": group,
+        "route": route,
+        "parameter": parameter,
+        "symbol": symbol,
+        "unit": unit,
+        "yaml_path": yaml_path,
+        "value_2026": value,
+        "status": (
+            status
+            if value is not None
+            else "B - Nao encontrado no YAML"
+        ),
+        "notes": notes,
+    })
+
+
+rows = []
+
+
+# ============================================================
+# COMMON / ECONOMICS
+# ============================================================
+
+for route, cfg in [
+    ("H2", h2),
+    ("B1", b1),
+]:
+
+    prefix = "H" if route == "H2" else "M"
+
+    add(
+        rows,
+        f"{prefix}-EC01",
+        "Economia",
+        route,
+        "Taxa de desconto / WACC",
+        "r",
+        "p.u. ou % a.a.",
+        "economics.discount_rate",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-EC02",
+        "Economia",
+        route,
+        "Horizonte economico",
+        "n",
+        "anos",
+        "economics.project_lifetime_years",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-PV01",
+        "PV",
+        route,
+        "CAPEX PV",
+        "",
+        "USD/kW",
+        "economics.capex.pv_usd_per_kw",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-PV02",
+        "PV",
+        route,
+        "OPEX fixo PV",
+        "",
+        "fracao CAPEX/ano",
+        "economics.opex_fixed.pv_fraction_of_capex_per_year",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B01",
+        "BSV",
+        route,
+        "CAPEX BSV",
+        "",
+        "USD/kWh",
+        "economics.capex.bsv_usd_per_kwh",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B02",
+        "BSV",
+        route,
+        "Integracao BSV",
+        "",
+        "USD/kWh",
+        "economics.capex.bsv_integration_usd_per_kwh",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B03",
+        "BSV",
+        route,
+        "OPEX fixo BSV",
+        "",
+        "fracao CAPEX/ano",
+        "economics.opex_fixed.bsv_fraction_of_capex_per_year",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B04",
+        "BSV",
+        route,
+        "SOH inicial BSV",
+        "SOH0",
+        "p.u.",
+        "technology.bsv.soh_initial",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B05",
+        "BSV",
+        route,
+        "Janela SOC util",
+        "DeltaSOC",
+        "p.u.",
+        "technology.bsv.usable_soc_window",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B06",
+        "BSV",
+        route,
+        "RTE BSV",
+        "eta_RT",
+        "p.u.",
+        "technology.bsv.battery_roundtrip",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-B07",
+        "BSV",
+        route,
+        "C-rate maximo",
+        "Cmax",
+        "h^-1",
+        "technology.bsv.c_rate_max",
+        cfg,
+    )
+
+
+# ============================================================
+# GRID / TARIFF
+# ============================================================
+
+for route, cfg in [
+    ("H2", h2),
+    ("B1", b1),
+]:
+
+    prefix = "H" if route == "H2" else "M"
+
+    add(
+        rows,
+        f"{prefix}-G01",
+        "Rede",
+        route,
+        "Tarifa fora de ponta",
+        "c_off",
+        "USD/kWh",
+        "tariff.offpeak_usd_per_kwh",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-G02",
+        "Rede",
+        route,
+        "Tarifa ponta",
+        "c_peak",
+        "USD/kWh",
+        "tariff.peak_usd_per_kwh",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-G03",
+        "Rede",
+        route,
+        "Inicio ponta",
+        "",
+        "h",
+        "tariff.peak_start_hour",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-G04",
+        "Rede",
+        route,
+        "Fim ponta",
+        "",
+        "h",
+        "tariff.peak_end_hour",
+        cfg,
+    )
+
+
+# ============================================================
+# H2-SPECIFIC
+# ============================================================
+
+add(
+    rows,
+    "H01",
+    "H2",
+    "H2",
+    "Eficiencia eletrolisador",
+    "eta_ELZ",
+    "p.u.",
+    "technology.hydrogen.electrolyzer_efficiency",
+    h2,
+)
+
+add(
+    rows,
+    "H02",
+    "H2",
+    "H2",
+    "PCI H2",
+    "PCI_H2",
+    "kWh/kg",
+    "technology.hydrogen.lhv_kwh_per_kg",
+    h2,
+)
+
+add(
+    rows,
+    "H03",
+    "H2",
+    "H2",
+    "Eficiencia fuel cell",
+    "eta_FC",
+    "p.u.",
+    "technology.hydrogen.fuelcell_efficiency",
+    h2,
+)
+
+add(
+    rows,
+    "H04",
+    "H2",
+    "H2",
+    "CAPEX eletrolisador",
+    "",
+    "USD/kW",
+    "economics.capex.electrolyzer_usd_per_kw",
+    h2,
+)
+
+add(
+    rows,
+    "H05",
+    "H2",
+    "H2",
+    "CAPEX tanque H2",
+    "",
+    "USD/kg",
+    "economics.capex.h2_tank_usd_per_kg",
+    h2,
+)
+
+add(
+    rows,
+    "H06",
+    "H2",
+    "H2",
+    "CAPEX fuel cell",
+    "",
+    "USD/kW",
+    "economics.capex.fuelcell_usd_per_kw",
+    h2,
+)
+
+add(
+    rows,
+    "H07",
+    "H2",
+    "H2",
+    "OPEX fixo eletrolisador",
+    "",
+    "fracao CAPEX/ano",
+    "economics.opex_fixed.electrolyzer_fraction_of_capex_per_year",
+    h2,
+)
+
+add(
+    rows,
+    "H08",
+    "H2",
+    "H2",
+    "OPEX fixo fuel cell",
+    "",
+    "fracao CAPEX/ano",
+    "economics.opex_fixed.fuelcell_fraction_of_capex_per_year",
+    h2,
+)
+
+add(
+    rows,
+    "H09",
+    "H2",
+    "H2",
+    "Limite eletrolisador",
+    "",
+    "kW",
+    "optimization.constraints.electrolyzer_kw.max",
+    h2,
+)
+
+add(
+    rows,
+    "H10",
+    "H2",
+    "H2",
+    "Limite tanque H2",
+    "",
+    "kg",
+    "optimization.constraints.h2_tank_kg.max",
+    h2,
+)
+
+add(
+    rows,
+    "H11",
+    "H2",
+    "H2",
+    "Limite fuel cell",
+    "",
+    "kW",
+    "optimization.constraints.fuelcell_kw.max",
+    h2,
+)
+
+
+# ============================================================
+# B1-SPECIFIC
+# ============================================================
+
+add(
+    rows,
+    "M01",
+    "Biometano",
+    "B1",
+    "PCI biometano",
+    "PCI_BM",
+    "kWh/Nm3",
+    "technology.biomethane.lhv_kwh_per_nm3",
+    b1,
+)
+
+add(
+    rows,
+    "M02",
+    "Biometano",
+    "B1",
+    "Fracao CH4",
+    "x_CH4",
+    "p.u.",
+    "technology.biomethane.methane_fraction",
+    b1,
+)
+
+add(
+    rows,
+    "M03",
+    "Biometano",
+    "B1",
+    "Oferta maxima biometano",
+    "V_sup_max",
+    "Nm3/dia",
+    "technology.biomethane.max_supply_nm3_day",
+    b1,
+)
+
+add(
+    rows,
+    "M04",
+    "Biometano",
+    "B1",
+    "SOC inicial armazenamento BM",
+    "SOC_BM0",
+    "p.u.",
+    "technology.biomethane_storage.soc_init_fraction",
+    b1,
+)
+
+add(
+    rows,
+    "M05",
+    "Biometano",
+    "B1",
+    "Vida util armazenamento BM",
+    "",
+    "anos",
+    "technology.biomethane_storage.lifetime_years",
+    b1,
+)
+
+add(
+    rows,
+    "M06",
+    "Biometano",
+    "B1",
+    "CAPEX armazenamento BM",
+    "",
+    "USD/Nm3",
+    "economics.capex.biomethane_storage_usd_per_nm3",
+    b1,
+)
+
+add(
+    rows,
+    "M07",
+    "Biometano",
+    "B1",
+    "Preco biometano",
+    "c_BM",
+    "USD/Nm3",
+    "economics.opex_variable_biomethane.biomethane_usd_per_nm3",
+    b1,
+)
+
+add(
+    rows,
+    "M08",
+    "Biometano",
+    "B1",
+    "Preco BM - baixo",
+    "",
+    "USD/Nm3",
+    "economics.price_sensitivity_biomethane.low_usd_per_nm3",
+    b1,
+)
+
+add(
+    rows,
+    "M09",
+    "Biometano",
+    "B1",
+    "Preco BM - base",
+    "",
+    "USD/Nm3",
+    "economics.price_sensitivity_biomethane.base_usd_per_nm3",
+    b1,
+)
+
+add(
+    rows,
+    "M10",
+    "Biometano",
+    "B1",
+    "Preco BM - alto",
+    "",
+    "USD/Nm3",
+    "economics.price_sensitivity_biomethane.high_usd_per_nm3",
+    b1,
+)
+
+add(
+    rows,
+    "C01-BM",
+    "CHP",
+    "B1",
+    "Eficiencia eletrica CHP",
+    "eta_el_CHP",
+    "p.u.",
+    "technology.chp.eta_el",
+    b1,
+)
+
+add(
+    rows,
+    "C02-BM",
+    "CHP",
+    "B1",
+    "CAPEX CHP",
+    "",
+    "USD/kW",
+    "economics.capex.chp_usd_per_kw",
+    b1,
+)
+
+add(
+    rows,
+    "C03-BM",
+    "CHP",
+    "B1",
+    "O&M variavel CHP",
+    "",
+    "USD/kWh",
+    "economics.opex_variable_biomethane.chp_usd_per_kwh",
+    b1,
+)
+
+add(
+    rows,
+    "C04-BM",
+    "CHP",
+    "B1",
+    "OPEX fixo CHP",
+    "",
+    "fracao CAPEX/ano",
+    "economics.opex_fixed.chp_fraction_of_capex_per_year",
+    b1,
+)
+
+add(
+    rows,
+    "C05-BM",
+    "CHP",
+    "B1",
+    "Limite CHP",
+    "",
+    "kW",
+    "optimization.constraints.chp_kw.max",
+    b1,
+)
+
+add(
+    rows,
+    "C06-BM",
+    "CHP",
+    "B1",
+    "Limite armazenamento BM",
+    "",
+    "Nm3",
+    "optimization.constraints.biomethane_storage_nm3.max",
+    b1,
+)
+
+
+# ============================================================
+# GA / OPTIMIZATION
+# ============================================================
+
+for route, cfg in [
+    ("H2", h2),
+    ("B1", b1),
+]:
+
+    prefix = "H" if route == "H2" else "M"
+
+    add(
+        rows,
+        f"{prefix}-O01",
+        "Otimizacao",
+        route,
+        "Population",
+        "",
+        "individuos",
+        "optimization.ga.population",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-O02",
+        "Otimizacao",
+        route,
+        "Generations",
+        "",
+        "geracoes",
+        "optimization.ga.generations",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-O03",
+        "Otimizacao",
+        route,
+        "Pareto period",
+        "",
+        "h",
+        "optimization.pareto_period_hours",
+        cfg,
+    )
+
+    add(
+        rows,
+        f"{prefix}-O04",
+        "Otimizacao",
+        route,
+        "Seed",
+        "",
+        "",
+        "reproducibility.seed",
+        cfg,
+    )
+
+
+# ============================================================
+# OUTPUT
+# ============================================================
+
+df = pd.DataFrame(rows)
+
+df.to_csv(
+    OUT_CSV,
+    index=False,
+    encoding="utf-8-sig",
+)
+
+
+with open(
+    OUT_TXT,
+    "w",
+    encoding="utf-8",
+) as f:
+
+    f.write(
+        "BASELINE 2026 - PARAMETROS EXTRAIDOS DOS YAMLs\n"
+    )
+
+    f.write("=" * 80 + "\n\n")
+
+    for route in ["H2", "B1"]:
+
+        f.write(f"\n=== {route} ===\n\n")
+
+        subset = df[
+            df["route"] == route
+        ]
+
+        f.write(
+            subset[
+                [
+                    "id",
+                    "group",
+                    "parameter",
+                    "unit",
+                    "value_2026",
+                    "yaml_path",
+                    "status",
+                ]
+            ].to_string(
+                index=False
+            )
+        )
+
+        f.write("\n")
+
+
+print()
+print("=== YAML EXTRACTION COMPLETE ===")
+print("H2 config =", H2_CONFIG)
+print("B1 config =", B1_CONFIG)
+
+print()
+print("rows =", len(df))
+
+print()
+print("=== NOT FOUND ===")
+
+missing = df[
+    df["value_2026"].isna()
+]
+
+if missing.empty:
+    print("NONE")
+else:
+    print(
+        missing[
+            [
+                "route",
+                "parameter",
+                "yaml_path",
+            ]
+        ].to_string(
+            index=False
+        )
+    )
+
+print()
+print("=== FILES ===")
+print(OUT_CSV.relative_to(ROOT))
+print(OUT_TXT.relative_to(ROOT))

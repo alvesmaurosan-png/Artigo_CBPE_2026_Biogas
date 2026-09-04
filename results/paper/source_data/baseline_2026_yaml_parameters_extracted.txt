@@ -1,0 +1,104 @@
+BASELINE 2026 - PARAMETROS EXTRAIDOS DOS YAMLs
+====================================================================================================
+H2_CONFIG: C:\Users\SN72755\Documents\Codex\2026-06-21\fdf-2\outputs\Artigo_CBPE_2026_Biometano\configs\paper\pv_bsv_h2_1500.yaml
+B1_CONFIG: C:\Users\SN72755\Documents\Codex\2026-06-21\fdf-2\outputs\Artigo_CBPE_2026_Biometano\configs\paper\pv_bsv_biomethane_1500.yaml
+====================================================================================================
+
+
+=== H2 ===
+
+    id      group                    parameter             unit value_2026                    status                                           resolved_yaml_path                                 prospective_status
+H-EC01   Economia Taxa de desconto / WACC real             p.u.       0.08      A - Consolidado 2026                                          economics.wacc_real                   D - Driver prospectivo 2030-2050
+H-EC02   Economia          Horizonte economico             anos         20      A - Consolidado 2026                             economics.analysis_horizon_years                 Avaliar manutencao ou harmonizacao
+H-PV01         PV                     CAPEX PV           USD/kW     1000.0      A - Consolidado 2026                                economics.capex.pv_usd_per_kw                     D - Driver prospectivo central
+H-PV02         PV                 OPEX fixo PV fracao CAPEX/ano       0.01      A - Consolidado 2026           economics.opex_fixed.pv_fraction_of_capex_per_year       D - Prospectivo se houver fonte diferenciada
+H-B01A        BSV             CAPEX modulo BSV          USD/kWh      120.0      A - Consolidado 2026                       economics.capex.bsv_module_usd_per_kwh                     D - Driver prospectivo central
+H-B01B        BSV          CAPEX repurpose BSV          USD/kWh       60.0      A - Consolidado 2026                    economics.capex.bsv_repurpose_usd_per_kwh             D - Driver prospectivo / circularidade
+H-B01C        BSV         CAPEX integracao BSV          USD/kWh       40.0      A - Consolidado 2026                  economics.capex.bsv_integration_usd_per_kwh                             D - Driver prospectivo
+H-B01D        BSV              CAPEX BSV total          USD/kWh      220.0 A - Derivado do YAML 2026                                                          NaN D - Resultado da soma dos componentes prospectivos
+ H-B02        BSV                OPEX fixo BSV fracao CAPEX/ano       0.02      A - Consolidado 2026          economics.opex_fixed.bsv_fraction_of_capex_per_year                      D - Prospectivo se necessario
+ H-B03        BSV              SOC inicial BSV             p.u.        0.5      A - Consolidado 2026                         technology.battery.soc_init_fraction                         Manter salvo sensibilidade
+ H-B04        BSV               SOC minimo BSV             p.u.        0.1      A - Consolidado 2026                          technology.battery.min_soc_fraction                         Manter salvo sensibilidade
+ H-B05        BSV              SOH inicial BSV             p.u.        0.8      A - Consolidado 2026                               technology.battery.soh_initial                  D - Pode evoluir tecnologicamente
+ H-B06        BSV              Janela SOC util             p.u.        0.8      A - Consolidado 2026                         technology.battery.usable_soc_window                      D - Sensibilidade tecnologica
+ H-B07        BSV                      RTE BSV             p.u.       0.85      A - Consolidado 2026                         technology.battery.battery_roundtrip                             D - Driver tecnologico
+ H-B08        BSV                C-rate maximo             h^-1        0.9      A - Consolidado 2026                                technology.battery.c_rate_max                             D - Driver tecnologico
+ H-G01       Rede             Modelo tarifario                    two_tier      A - Consolidado 2026                                         tariff.pricing_model                   D - Driver de politica tarifaria
+ H-G02       Rede         Tarifa fora de ponta          USD/kWh       0.15      A - Consolidado 2026                                 tariff.offpeak_price_usd_kwh                     D - Driver prospectivo central
+ H-G03       Rede                 Tarifa ponta          USD/kWh        0.5      A - Consolidado 2026                                    tariff.peak_price_usd_kwh                     D - Driver prospectivo central
+ H-G04       Rede              Inicio da ponta             hora         18      A - Consolidado 2026                                tariff.peak_window.start_hour                             D - Politica tarifaria
+ H-G05       Rede                 Fim da ponta             hora         21      A - Consolidado 2026                                  tariff.peak_window.end_hour                             D - Politica tarifaria
+ H-G06       Rede    Inclui demanda contratada          boolean       True      A - Consolidado 2026                                 tariff.include_demand_charge                             D - Politica tarifaria
+ H-G07       Rede            Tarifa de demanda       USD/kW.mes       30.0      A - Consolidado 2026                            tariff.demand_charge_usd_kw_month                             D - Driver prospectivo
+   H01         H2     Eficiencia eletrolisador             p.u.        0.7      A - Consolidado 2026                         technology.efficiencies.electrolyzer                     D - Driver tecnologico central
+   H02         H2                       PCI H2           kWh/kg      33.33      A - Consolidado 2026                           technology.hydrogen.lhv_kwh_per_kg                          Parametro fisico - manter
+   H03         H2         Eficiencia fuel cell             p.u.        0.5      A - Consolidado 2026                             technology.efficiencies.fuelcell                     D - Driver tecnologico central
+   H04         H2          CAPEX eletrolisador           USD/kW     2000.0      A - Consolidado 2026                      economics.capex.electrolyzer_usd_per_kw                     D - Driver prospectivo central
+   H05         H2              CAPEX tanque H2           USD/kg      600.0      A - Consolidado 2026                           economics.capex.h2_tank_usd_per_kg                             D - Driver prospectivo
+   H06         H2              CAPEX fuel cell           USD/kW     1300.0      A - Consolidado 2026                          economics.capex.fuelcell_usd_per_kw                     D - Driver prospectivo central
+   H07         H2      OPEX fixo eletrolisador fracao CAPEX/ano       0.02      A - Consolidado 2026 economics.opex_fixed.electrolyzer_fraction_of_capex_per_year                                    D - Prospectivo
+   H08         H2          OPEX fixo fuel cell fracao CAPEX/ano       0.03      A - Consolidado 2026     economics.opex_fixed.fuelcell_fraction_of_capex_per_year                                    D - Prospectivo
+   H09         H2          OPEX fixo tanque H2 fracao CAPEX/ano       0.01      A - Consolidado 2026      economics.opex_fixed.h2_tank_fraction_of_capex_per_year                                    D - Prospectivo
+   H10         H2        SOC inicial tanque H2             p.u.        0.5      A - Consolidado 2026                      technology.h2_storage.soc_init_fraction                               Premissa operacional
+   H11         H2         Limite eletrolisador               kW        500      A - Consolidado 2026                 optimization.constraints.electrolyzer_kw.max                        D - Pode variar por cenario
+   H12         H2             Limite tanque H2               kg        300      A - Consolidado 2026                      optimization.constraints.h2_tank_kg.max                        D - Pode variar por cenario
+   H13         H2             Limite fuel cell               kW        500      A - Consolidado 2026                     optimization.constraints.fuelcell_kw.max                        D - Pode variar por cenario
+ H-O01 Otimizacao                   Population       individuos         48      A - Consolidado 2026                                                ga.population                           Nao e driver prospectivo
+ H-O02 Otimizacao                  Generations         geracoes         30      A - Consolidado 2026                                               ga.generations                           Nao e driver prospectivo
+ H-O03 Otimizacao                Pareto period                h         24      A - Consolidado 2026                             optimization.pareto_period_hours                           Nao e driver prospectivo
+ H-O04 Otimizacao           Single-case period                h         24      A - Consolidado 2026                        optimization.single_case_period_hours                           Nao e driver prospectivo
+ H-O05 Otimizacao                         Seed                          42      A - Consolidado 2026                                         reproducibility.seed                           Nao e driver prospectivo
+
+
+=== B1 ===
+
+    id      group                    parameter             unit value_2026                    status                                        resolved_yaml_path                                 prospective_status
+M-EC01   Economia Taxa de desconto / WACC real             p.u.       0.08      A - Consolidado 2026                                       economics.wacc_real                   D - Driver prospectivo 2030-2050
+M-EC02   Economia          Horizonte economico             anos         20      A - Consolidado 2026                          economics.analysis_horizon_years                 Avaliar manutencao ou harmonizacao
+M-PV01         PV                     CAPEX PV           USD/kW     1000.0      A - Consolidado 2026                             economics.capex.pv_usd_per_kw                     D - Driver prospectivo central
+M-PV02         PV                 OPEX fixo PV fracao CAPEX/ano       0.01      A - Consolidado 2026        economics.opex_fixed.pv_fraction_of_capex_per_year       D - Prospectivo se houver fonte diferenciada
+M-B01A        BSV             CAPEX modulo BSV          USD/kWh      120.0      A - Consolidado 2026                    economics.capex.bsv_module_usd_per_kwh                     D - Driver prospectivo central
+M-B01B        BSV          CAPEX repurpose BSV          USD/kWh       60.0      A - Consolidado 2026                 economics.capex.bsv_repurpose_usd_per_kwh             D - Driver prospectivo / circularidade
+M-B01C        BSV         CAPEX integracao BSV          USD/kWh       40.0      A - Consolidado 2026               economics.capex.bsv_integration_usd_per_kwh                             D - Driver prospectivo
+M-B01D        BSV              CAPEX BSV total          USD/kWh      220.0 A - Derivado do YAML 2026                                                       NaN D - Resultado da soma dos componentes prospectivos
+ M-B02        BSV                OPEX fixo BSV fracao CAPEX/ano       0.02      A - Consolidado 2026       economics.opex_fixed.bsv_fraction_of_capex_per_year                      D - Prospectivo se necessario
+ M-B03        BSV              SOC inicial BSV             p.u.        0.5      A - Consolidado 2026                      technology.battery.soc_init_fraction                         Manter salvo sensibilidade
+ M-B04        BSV               SOC minimo BSV             p.u.        0.1      A - Consolidado 2026                       technology.battery.min_soc_fraction                         Manter salvo sensibilidade
+ M-B05        BSV              SOH inicial BSV             p.u.        0.8      A - Consolidado 2026                            technology.battery.soh_initial                  D - Pode evoluir tecnologicamente
+ M-B06        BSV              Janela SOC util             p.u.        0.8      A - Consolidado 2026                      technology.battery.usable_soc_window                      D - Sensibilidade tecnologica
+ M-B07        BSV                      RTE BSV             p.u.       0.85      A - Consolidado 2026                      technology.battery.battery_roundtrip                             D - Driver tecnologico
+ M-B08        BSV                C-rate maximo             h^-1        0.9      A - Consolidado 2026                             technology.battery.c_rate_max                             D - Driver tecnologico
+ M-G01       Rede             Modelo tarifario                    two_tier      A - Consolidado 2026                                      tariff.pricing_model                   D - Driver de politica tarifaria
+ M-G02       Rede         Tarifa fora de ponta          USD/kWh       0.15      A - Consolidado 2026                              tariff.offpeak_price_usd_kwh                     D - Driver prospectivo central
+ M-G03       Rede                 Tarifa ponta          USD/kWh        0.5      A - Consolidado 2026                                 tariff.peak_price_usd_kwh                     D - Driver prospectivo central
+ M-G04       Rede              Inicio da ponta             hora         18      A - Consolidado 2026                             tariff.peak_window.start_hour                             D - Politica tarifaria
+ M-G05       Rede                 Fim da ponta             hora         21      A - Consolidado 2026                               tariff.peak_window.end_hour                             D - Politica tarifaria
+ M-G06       Rede    Inclui demanda contratada          boolean       True      A - Consolidado 2026                              tariff.include_demand_charge                             D - Politica tarifaria
+ M-G07       Rede            Tarifa de demanda       USD/kW.mes       30.0      A - Consolidado 2026                         tariff.demand_charge_usd_kw_month                             D - Driver prospectivo
+   M01  Biometano                PCI biometano          kWh/Nm3      10.19      A - Consolidado 2026                     technology.biomethane.lhv_kwh_per_nm3                          Parametro fisico - manter
+   M02  Biometano                   Fracao CH4             p.u.      0.965      A - Consolidado 2026                    technology.biomethane.methane_fraction                   Auditar qualidade / faixa futura
+   M03  Biometano      Oferta maxima biometano          Nm3/dia      200.0      A - Consolidado 2026                  technology.biomethane.max_supply_nm3_day                  D - Driver prospectivo importante
+   M04  Biometano SOC inicial armazenamento BM             p.u.        0.5      A - Consolidado 2026           technology.biomethane_storage.soc_init_fraction                               Premissa operacional
+   M05  Biometano  SOC minimo armazenamento BM             p.u.        0.0      A - Consolidado 2026            technology.biomethane_storage.soc_min_fraction                               Premissa operacional
+   M06  Biometano   Vida util armazenamento BM             anos         20      A - Consolidado 2026              technology.biomethane_storage.lifetime_years                 D - Revisar se houver fonte futura
+   M07  Biometano       CAPEX armazenamento BM          USD/Nm3      162.0      A - Consolidado 2026            economics.capex.biomethane_storage_usd_per_nm3                             D - Driver prospectivo
+   M08  Biometano              Preco biometano          USD/Nm3     0.7099      A - Consolidado 2026 economics.opex_variable_biomethane.biomethane_usd_per_nm3                     D - Driver prospectivo central
+   M09  Biometano             Preco BM - baixo          USD/Nm3     0.5266      A - Consolidado 2026    economics.price_sensitivity_biomethane.low_usd_per_nm3                                Pode auxiliar S1-S3
+   M10  Biometano              Preco BM - base          USD/Nm3     0.7099      A - Consolidado 2026   economics.price_sensitivity_biomethane.base_usd_per_nm3                                         Referencia
+   M11  Biometano              Preco BM - alto          USD/Nm3     0.8913      A - Consolidado 2026   economics.price_sensitivity_biomethane.high_usd_per_nm3                                Pode auxiliar S1-S3
+C01-BM        CHP      Eficiencia eletrica CHP             p.u.      0.385      A - Consolidado 2026                                     technology.chp.eta_el                             D - Driver tecnologico
+C02-BM        CHP                    CAPEX CHP           USD/kW     4160.0      A - Consolidado 2026                            economics.capex.chp_usd_per_kw                     D - Driver prospectivo central
+C03-BM        CHP             O&M variavel CHP          USD/kWh     0.0344      A - Consolidado 2026        economics.opex_variable_biomethane.chp_usd_per_kwh                                    D - Prospectivo
+C04-BM        CHP                OPEX fixo CHP fracao CAPEX/ano        0.0      A - Consolidado 2026       economics.opex_fixed.chp_fraction_of_capex_per_year               C - Auditar fonte / intencionalidade
+C05-BM        CHP                   Limite CHP               kW        200      A - Consolidado 2026                       optimization.constraints.chp_kw.max                        D - Pode variar por cenario
+C06-BM        CHP      Limite armazenamento BM              Nm3        400      A - Consolidado 2026       optimization.constraints.biomethane_storage_nm3.max                     D - Infraestrutura / logistica
+ M-O01 Otimizacao                   Population       individuos         48      A - Consolidado 2026                                             ga.population                           Nao e driver prospectivo
+ M-O02 Otimizacao                  Generations         geracoes         30      A - Consolidado 2026                                            ga.generations                           Nao e driver prospectivo
+ M-O03 Otimizacao                Pareto period                h         24      A - Consolidado 2026                          optimization.pareto_period_hours                           Nao e driver prospectivo
+ M-O04 Otimizacao           Single-case period                h         24      A - Consolidado 2026                     optimization.single_case_period_hours                           Nao e driver prospectivo
+ M-O05 Otimizacao                         Seed                          42      A - Consolidado 2026                                      reproducibility.seed                           Nao e driver prospectivo
+
+
+=== NOT FOUND ===
+
+NONE

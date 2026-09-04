@@ -1,0 +1,46 @@
+project:
+  name: "cbpe_xv_garagem_onibus_biomethane_chp_thermal"
+  version: "0.9.0-biomethane-b1-thermal-dispatch"
+
+system:
+  route: "biomethane"
+
+thermal_recovery:
+  enabled: true
+
+  # Crédito econômico do calor efetivamente utilizado.
+  # Hipótese de sensibilidade a ser posteriormente documentada.
+  heat_reference_cost_usd_per_kwh_th: 0.08
+
+  cases:
+
+    T0:
+      description: "Sem valorização térmica - baseline B1 original"
+      demand_profile: null
+
+    T1:
+      description: "Demanda térmica moderada da garagem"
+      demand_profile: "data/processed/thermal_demand_T1.csv"
+
+    T2:
+      description: "Demanda térmica elevada da garagem"
+      demand_profile: "data/processed/thermal_demand_T2.csv"
+
+technology:
+
+  chp_thermal:
+
+    # Deve ser consistente com a eficiência elétrica
+    # usada no MILP B1 original.
+    electrical_efficiency: 0.385
+
+    # Hipótese provisória de eficiência térmica recuperável.
+    thermal_efficiency: 0.45
+
+thermal_demand:
+
+  T1:
+    annual_energy_kwh_th: 200000.0
+
+  T2:
+    annual_energy_kwh_th: 400000.0
