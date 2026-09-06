@@ -66,6 +66,6 @@
   "h2_reference_path": "results/validation/h2_eta_compression_regression/regression_summary.csv",
   "h2_run_path": "results/runs/pv_bsv_h2_1500_regression_2026_with_h2/pareto_20260905_220807",
   "schema_version": "1.0",
-  "timestamp": "2026-09-06T01:21:53+00:00",
+  "timestamp": "2026-09-06T01:37:45+00:00",
   "timestamp_timezone": "UTC"
 }

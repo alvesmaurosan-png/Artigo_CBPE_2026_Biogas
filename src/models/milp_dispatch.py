@@ -134,6 +134,45 @@ class MILPDispatchOptimizer:
                 self.config["technology"]["h2_storage"]["soc_init_fraction"]
             )
 
+            # -------------------------------------------------
+            # H2 compression
+            # -------------------------------------------------
+            comp_cfg = self.config["technology"].get(
+                "h2_compression",
+                {},
+            )
+            self.h2_compression_enabled = bool(
+                comp_cfg.get("enabled", False)
+            )
+            if self.h2_compression_enabled:
+                self.h2_compression_sec_kwh_per_kg = float(
+                    comp_cfg["specific_energy_kwh_per_kg"]
+                )
+                if self.h2_compression_sec_kwh_per_kg <= 0:
+                    raise ValueError(
+                        "technology.h2_compression."
+                        "specific_energy_kwh_per_kg must be > 0"
+                    )
+            else:
+                self.h2_compression_sec_kwh_per_kg = 0.0
+            self.h2_compression_kw_per_kw_elz = (
+                self.eff_electrolyzer
+                * self.h2_compression_sec_kwh_per_kg
+                / self.h2_lhv
+            )
+            self.electrolyzer_sec_kwh_per_kg = (
+                self.h2_lhv
+                / self.eff_electrolyzer
+            )
+            self.stored_h2_sec_kwh_per_kg = (
+                self.electrolyzer_sec_kwh_per_kg
+                + self.h2_compression_sec_kwh_per_kg
+            )
+            self.p2h2_stored_eff_lhv = (
+                self.h2_lhv
+                / self.stored_h2_sec_kwh_per_kg
+            )
+
             if not 0.0 <= self.h2_soc_init_fraction <= 1.0:
                 raise ValueError(
                     "technology.h2_storage.soc_init_fraction must be in [0, 1]"
@@ -249,6 +288,39 @@ class MILPDispatchOptimizer:
             self.biogas_lhv_kwh_per_nm3 = float(
                 bg_cfg["lhv_kwh_per_nm3"]
             )
+            # -------------------------------------------------
+            # ID 48 — methane emissions B2
+            #
+            # methane_fraction:
+            #   CH4 volumetric fraction in gross biogas.
+            #
+            # upstream_methane_loss_fraction (48a):
+            #   fraction of gross CH4 production lost before CHP.
+            #   In the MILP this is represented as an equivalent
+            #   reduction of chemical-energy-bearing biogas
+            #   available to the gasometer.
+            #
+            # chp_methane_slip_fraction (48b):
+            #   fraction of CH4 fed to CHP emitted unburned.
+            #   Environmental accounting only — it does NOT
+            #   derate CHP electrical output because eta_el
+            #   already represents real engine conversion.
+            # -------------------------------------------------
+            self.biogas_methane_fraction = float(
+                bg_cfg["methane_fraction"]
+            )
+            self.biogas_upstream_methane_loss_fraction = float(
+                bg_cfg.get(
+                    "upstream_methane_loss_fraction",
+                    0.0,
+                )
+            )
+            self.biogas_chp_methane_slip_fraction = float(
+                bg_cfg.get(
+                    "chp_methane_slip_fraction",
+                    0.0,
+                )
+            )
             self.biogas_parasitic_fraction = float(
                 bg_cfg.get("parasitic_fraction", 0.0)
             )
@@ -274,6 +346,31 @@ class MILPDispatchOptimizer:
                     "technology.biogas.lhv_kwh_per_nm3 must be > 0"
                 )
 
+            if not 0.0 < self.biogas_methane_fraction <= 1.0:
+                raise ValueError(
+                    "technology.biogas.methane_fraction "
+                    "must be in (0, 1]"
+                )
+            if not (
+                0.0
+                <= self.biogas_upstream_methane_loss_fraction
+                < 1.0
+            ):
+                raise ValueError(
+                    "technology.biogas."
+                    "upstream_methane_loss_fraction "
+                    "must be in [0, 1)"
+                )
+            if not (
+                0.0
+                <= self.biogas_chp_methane_slip_fraction
+                < 1.0
+            ):
+                raise ValueError(
+                    "technology.biogas."
+                    "chp_methane_slip_fraction "
+                    "must be in [0, 1)"
+                )
             if not 0.0 <= self.biogas_parasitic_fraction < 1.0:
                 raise ValueError(
                     "technology.biogas.parasitic_fraction "
@@ -814,6 +911,10 @@ class MILPDispatchOptimizer:
             # Balanco eletrico por rota
             # -------------------------------------------------
             if self.route == "hydrogen":
+                p_h2_comp = (
+                    v["p_elz"][t]
+                    * self.h2_compression_kw_per_kw_elz
+                )
                 solver.Add(
                     v["p_grid"][t]
                     + v["p_pv_used"][t]
@@ -823,6 +924,7 @@ class MILPDispatchOptimizer:
                     == demand
                     + v["p_bat_ch"][t]
                     + v["p_elz"][t]
+                    + p_h2_comp
                 )
 
             elif self.route == "biomethane":
@@ -1064,9 +1166,35 @@ class MILPDispatchOptimizer:
                 # ---------------------------------------------
                 # ProduÃ§Ã£o contÃ­nua agregada de biogÃ¡s
                 # ---------------------------------------------
-                biogas_prod = (
+                # ---------------------------------------------
+                # ID 48a — upstream methane loss
+                #
+                # biogas_prod_gross is the gross biogas production.
+                #
+                # The upstream CH4 loss is represented in the
+                # energetic MILP as an equivalent reduction of
+                # usable biogas:
+                #
+                # V_BG,available(eq)
+                # = V_BG,gross * (1 - f_CH4,upstream)
+                #
+                # This preserves the consolidated LHV convention
+                # of the B2 model while removing the corresponding
+                # fraction of methane chemical energy before CHP.
+                #
+                # 48b CHP methane slip is intentionally NOT applied
+                # here; it is an environmental-output term only.
+                # ---------------------------------------------
+                biogas_prod_gross = (
                     self.biogas_production_nm3_hour
                     * dt
+                )
+                biogas_prod = (
+                    biogas_prod_gross
+                    * (
+                        1.0
+                        - self.biogas_upstream_methane_loss_fraction
+                    )
                 )
 
                 # ---------------------------------------------
@@ -1337,6 +1465,12 @@ class MILPDispatchOptimizer:
                         "p_elz_kw": float(
                             v["p_elz"][t].solution_value()
                         ),
+                        "p_h2_comp_kw": (
+                            float(
+                                v["p_elz"][t].solution_value()
+                            )
+                            * self.h2_compression_kw_per_kw_elz
+                        ),
                         "p_fc_kw": float(
                             v["p_fc"][t].solution_value()
                         ),
@@ -1386,12 +1520,46 @@ class MILPDispatchOptimizer:
                                 v["u_chp_on"][t].solution_value()
                             )
                         ),
+                        # Gross production remains exported
+                        # under the historical column name for
+                        # backward compatibility.
                         "biogas_production_nm3": (
                             self.biogas_production_nm3_hour
                             * self.timestep_hours
                         ),
+                        "biogas_production_gross_nm3": (
+                            self.biogas_production_nm3_hour
+                            * self.timestep_hours
+                        ),
+                        "biogas_upstream_ch4_loss_nm3": (
+                            self.biogas_production_nm3_hour
+                            * self.timestep_hours
+                            * self.biogas_methane_fraction
+                            * self.biogas_upstream_methane_loss_fraction
+                        ),
+                        "biogas_production_available_eq_nm3": (
+                            self.biogas_production_nm3_hour
+                            * self.timestep_hours
+                            * (
+                                1.0
+                                - self.biogas_upstream_methane_loss_fraction
+                            )
+                        ),
                         "biogas_use_nm3": float(
                             v["biogas_use"][t].solution_value()
+                        ),
+                        "ch4_to_chp_nm3": (
+                            float(
+                                v["biogas_use"][t].solution_value()
+                            )
+                            * self.biogas_methane_fraction
+                        ),
+                        "ch4_chp_slip_nm3": (
+                            float(
+                                v["biogas_use"][t].solution_value()
+                            )
+                            * self.biogas_methane_fraction
+                            * self.biogas_chp_methane_slip_fraction
                         ),
                         "biogas_level_nm3": float(
                             v["biogas_level"][t].solution_value()

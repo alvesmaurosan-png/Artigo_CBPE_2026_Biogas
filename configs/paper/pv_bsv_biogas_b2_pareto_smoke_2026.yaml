@@ -1,11 +1,11 @@
 project:
   name: cbpe_2026_garagem_onibus_biogas_b2
-  version: 1.0.0-b2-50-baseline
-  description: 'Caso base B2-50 para microrrede de garagem de ônibus com PV, BESS
-    de segunda vida e biogás near-site produzido por digestão anaeróbia de resíduos
-    alimentares/FORSU segregada, armazenado em gasômetro de baixa pressão e convertido
-    em eletricidade por CHP. A formulação tarifária segue o caso harmonizado M1b,
-    com cobrança mensal de demanda internalizada no despacho.
+  version: 1.0.0-b2-100-baseline
+  description: 'Caso base B2-50 para microrrede de garagem de Ã´nibus com PV, BESS
+    de segunda vida e biogÃ¡s near-site produzido por digestÃ£o anaerÃ³bia de resÃ­duos
+    alimentares/FORSU segregada, armazenado em gasÃ´metro de baixa pressÃ£o e convertido
+    em eletricidade por CHP. A formulaÃ§Ã£o tarifÃ¡ria segue o caso harmonizado M1b,
+    com cobranÃ§a mensal de demanda internalizada no despacho.
 
     '
   timezone: America/Sao_Paulo
@@ -93,7 +93,7 @@ technology:
     battery_roundtrip: 0.85
   biogas:
     substrate_reference: food_waste_segregated_forsu
-    substrate_t_day: 0.8468318327473257
+    substrate_t_day: 1.6936636654946513
     methane_yield_nm3_per_t: 60.0
     methane_fraction: 0.6
     upstream_methane_loss_fraction: 0.006
@@ -126,11 +126,11 @@ degradation:
   include_in_objective: true
   report_separately: true
 fixed_case:
-  enabled: true
+  enabled: false
   pv_kw: 990.0
   bsv_kwh: 1241.0
-  chp_kw: 50.0
-  biogas_storage_nm3: 112.91091103297676
+  chp_kw: 100.0
+  biogas_storage_nm3: 225.8218220659535
 optimization:
   pareto_period_hours: 24
   single_case_period_hours: 24
@@ -138,6 +138,16 @@ optimization:
   objective:
   - lcoe_harmonized_usd_kwh
   - P_peak_grid_opt_kw
+  constraints:
+    pv_kw:
+      min: 0.0
+      max: 1200.0
+    bsv_kwh:
+      min: 0.0
+      max: 1500.0
+    chp_kw:
+      min: 50.0
+      max: 200.0
 validation:
   require_zero_eens: true
   eens_tolerance_kwh: 0.0
@@ -225,3 +235,22 @@ service:
   average_passenger_occupancy: 23.0
   vehicle_km_annual: 3327000.0
   passenger_km_annual: 76521000.0
+biogas_pareto_scaling:
+  status: FROZEN_BASELINE_2026
+  basis: linear coupling validated on B2-50/100/150/200
+  biogas_storage_nm3_per_kw_chp: 2.258218220659535
+  substrate_t_day_per_kw_chp: 0.01693663665494651
+  substrate_days_per_year: 365.0
+  validated_chp_min_kw: 50.0
+  validated_chp_max_kw: 200.0
+ga:
+  decision_variables:
+  - pv_kw
+  - bsv_kwh
+  - chp_kw
+  population: 2
+  generations: 1
+  crossover_prob: 0.9
+  mutation_prob: 0.1
+  tournament_size: 2
+  integer_variables: true
