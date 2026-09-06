@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import copy
+import math
 import random
 import sys
 from dataclasses import dataclass
@@ -12,6 +13,12 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
+
+from src.optimization.convergence_metrics import (
+    ObjectiveBounds,
+    build_generation_metrics,
+    nondominated_2d,
+)
 import yaml
 
 # ---------------------------------------------------------------------
@@ -171,6 +178,103 @@ class NSGA2Optimizer:
 
         self.first_objective_name = self.objective_list[0]
         self.second_objective_name = self.objective_list[1]
+
+        # --------------------------------------------------
+        # CONVERGENCE TRACKING
+        #
+        # Read-only instrumentation.
+        # Disabled by default.
+        # --------------------------------------------------
+        convergence_cfg = self.config.get(
+            "convergence_tracking",
+            {},
+        )
+        self.convergence_tracking_enabled = bool(
+            convergence_cfg.get(
+                "enabled",
+                False,
+            )
+        )
+        self.convergence_history: List[
+            Dict[str, Any]
+        ] = []
+        self.convergence_front_history: List[
+            Dict[str, Any]
+        ] = []
+        self.convergence_bounds = None
+        reference_point = convergence_cfg.get(
+            "reference_point",
+            [1.1, 1.1],
+        )
+        if (
+            not isinstance(
+                reference_point,
+                (list, tuple),
+            )
+            or len(reference_point) != 2
+        ):
+            raise ValueError(
+                "convergence_tracking.reference_point "
+                "must contain exactly two values."
+            )
+        self.convergence_reference_point = (
+            float(reference_point[0]),
+            float(reference_point[1]),
+        )
+        if self.convergence_tracking_enabled:
+            if (
+                self.first_objective_name
+                != "lcoe_harmonized_usd_kwh"
+            ):
+                raise ValueError(
+                    "Pareto 2026 convergence tracking "
+                    "requires objective 1 = "
+                    "'lcoe_harmonized_usd_kwh'."
+                )
+            if (
+                self.second_objective_name
+                != "P_peak_grid_opt_kw"
+            ):
+                raise ValueError(
+                    "Pareto 2026 convergence tracking "
+                    "requires objective 2 = "
+                    "'P_peak_grid_opt_kw'."
+                )
+            norm = convergence_cfg.get(
+                "normalization",
+                {},
+            )
+            required_norm = (
+                "f1_min",
+                "f1_max",
+                "f2_min",
+                "f2_max",
+            )
+            missing_norm = [
+                key
+                for key in required_norm
+                if key not in norm
+            ]
+            if missing_norm:
+                raise ValueError(
+                    "Missing convergence normalization "
+                    f"parameters: {missing_norm}"
+                )
+            self.convergence_bounds = ObjectiveBounds(
+                f1_min=float(
+                    norm["f1_min"]
+                ),
+                f1_max=float(
+                    norm["f1_max"]
+                ),
+                f2_min=float(
+                    norm["f2_min"]
+                ),
+                f2_max=float(
+                    norm["f2_max"]
+                ),
+            )
+            self.convergence_bounds.validate()
         allowed_first_objectives = {
             "lcoe_usd_kwh",
             "lcoe_legacy_usd_kwh",
@@ -510,6 +614,35 @@ class NSGA2Optimizer:
     # -----------------------------------------------------------------
     # Avaliação
     # -----------------------------------------------------------------
+    def _run_pareto_dispatch(
+        self,
+        optimizer,
+    ):
+        """
+        Route-aware annual dispatch used consistently by
+        Pareto evaluation and Pareto enrichment.
+        B2 / biogas:
+            commit horizon = 24 h
+            look-ahead     = 6 h
+        Hydrogen and every non-B2 route:
+            preserve the historical dispatch call exactly,
+            without commit_hours or lookahead_hours.
+        Marker:
+            B2_M2_LA6_ROUTE_BINDING
+        """
+        if self.route == "biogas":
+            return optimizer.run_annual_simulation(
+                df=self.df_h,
+                period_hours=self.pareto_period_hours,
+                commit_hours=24,
+                lookahead_hours=6,
+            )
+        # H2 regression protection:
+        # preserve the historical annual-dispatch semantics.
+        return optimizer.run_annual_simulation(
+            df=self.df_h,
+            period_hours=self.pareto_period_hours,
+        )
     def evaluate(self, individual: Individual) -> None:
         key = self._capacities_key(individual.capacities)
 
@@ -528,9 +661,8 @@ class NSGA2Optimizer:
             degradation_model=None,
         )
 
-        result = optimizer.run_annual_simulation(
-            df=self.df_h,
-            period_hours=self.pareto_period_hours,
+        result = self._run_pareto_dispatch(
+            optimizer
         )
 
         dispatch = result.dispatch_df
@@ -942,6 +1074,97 @@ class NSGA2Optimizer:
     # -----------------------------------------------------------------
     # Loop principal
     # -----------------------------------------------------------------
+
+    # -----------------------------------------------------------------
+    # Convergence instrumentation
+    # -----------------------------------------------------------------
+    def _record_convergence_state(
+        self,
+        generation: int,
+        front: List[Individual],
+    ) -> None:
+        """
+        Record Front 0 in objective space without changing
+        any evolutionary operation.
+        """
+        if not self.convergence_tracking_enabled:
+            return
+        if self.convergence_bounds is None:
+            raise RuntimeError(
+                "Convergence tracking enabled "
+                "without normalization bounds."
+            )
+        raw_points = []
+        for ind in front:
+            if (
+                ind.objectives is None
+                or ind.metrics is None
+            ):
+                continue
+            f1 = float(
+                ind.objectives[0]
+            )
+            if (
+                "P_peak_grid_opt_kw"
+                not in ind.metrics
+            ):
+                raise KeyError(
+                    "P_peak_grid_opt_kw missing "
+                    "from convergence metrics."
+                )
+            f2 = float(
+                ind.metrics[
+                    "P_peak_grid_opt_kw"
+                ]
+            )
+            if (
+                not math.isfinite(f1)
+                or not math.isfinite(f2)
+            ):
+                continue
+            raw_points.append(
+                (
+                    f1,
+                    f2,
+                )
+            )
+        if not raw_points:
+            raise RuntimeError(
+                "Convergence recorder received "
+                "an empty objective front."
+            )
+        nd_points = nondominated_2d(
+            raw_points
+        )
+        metrics = build_generation_metrics(
+            generation=generation,
+            objective_points=nd_points,
+            bounds=self.convergence_bounds,
+            reference_point=(
+                self.convergence_reference_point
+            ),
+        )
+        self.convergence_history.append(
+            metrics.to_dict()
+        )
+        for point_id, (
+            f1,
+            f2,
+        ) in enumerate(
+            nd_points
+        ):
+            self.convergence_front_history.append(
+                {
+                    "generation":
+                        int(generation),
+                    "point_id":
+                        int(point_id),
+                    "lcoe_harmonized_usd_kwh":
+                        float(f1),
+                    "P_peak_grid_opt_kw":
+                        float(f2),
+                }
+            )
     def run(self, verbose: bool = True) -> pd.DataFrame:
         population = self._initialize_population()
         for ind in population:
@@ -951,6 +1174,16 @@ class NSGA2Optimizer:
         for front in fronts:
             self.compute_crowding_distance(front)
 
+
+        if (
+            self.convergence_tracking_enabled
+            and fronts
+            and fronts[0]
+        ):
+            self._record_convergence_state(
+                generation=0,
+                front=fronts[0],
+            )
         for gen in range(self.generations):
             offspring = self.make_offspring(population)
             for ind in offspring:
@@ -958,6 +1191,17 @@ class NSGA2Optimizer:
 
             combined = population + offspring
             population = self.environmental_selection(combined)
+
+            if self.convergence_tracking_enabled:
+                convergence_front = (
+                    self.fast_non_dominated_sort(
+                        population
+                    )[0]
+                )
+                self._record_convergence_state(
+                    generation=gen + 1,
+                    front=convergence_front,
+                )
 
             if verbose:
                 best_front = self.fast_non_dominated_sort(population)[0]
@@ -1077,9 +1321,8 @@ class NSGA2Optimizer:
                     degradation_model=None,
                 )
 
-                result = optimizer.run_annual_simulation(
-                    df=self.df_h,  # <<< CORREÇÃO CRÍTICA
-                    period_hours=self.pareto_period_hours,  # <<< CONSISTÊNCIA COM GA
+                result = self._run_pareto_dispatch(
+                    optimizer
                 )
 
                 dispatch = result.dispatch_df

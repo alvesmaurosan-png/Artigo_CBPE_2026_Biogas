@@ -1,0 +1,127 @@
+{
+  "B2": {
+    "gates": {
+      "B2_CONFIG_ROUTE_GATE": true,
+      "B2_GRID_DEPENDENCY_IDENTITY_GATE": true,
+      "B2_HARMONIZED_ECONOMICS_GATE": true,
+      "B2_M2_LA6_END_TO_END_GATE": true,
+      "B2_M2_LA6_REFERENCE_PEAK_GATE": true,
+      "B2_OBJECTIVE_GATE": true,
+      "B2_OLD_468_FLOOR_REMOVED_GATE": true,
+      "B2_PHYSICAL_COUPLING_GATE": true,
+      "B2_SCHEMA_CONTRACT_GATE": true,
+      "B2_TEMPORAL_ARCHITECTURE_GATE": true
+    },
+    "outputs": {
+      "P_peak_grid_opt_kw": 447.9081258460328,
+      "lcoe_harmonized_usd_kwh": 0.2710153274803911,
+      "lcoe_legacy_usd_kwh": 0.2080738358859469,
+      "total_grid_dependency_ratio": 0.6859007271567601
+    },
+    "residuals": {
+      "delta_pgrid_vs_la6_reference_kw": 3.2798652682686225e-11,
+      "grid_dependency_identity_error": NaN,
+      "storage_error_nm3": 2.842170943040401e-14,
+      "substrate_error_t_day": 0.0
+    },
+    "route": "biogas",
+    "temporal_architecture": {
+      "commit_hours": 24,
+      "lookahead_hours": 6,
+      "mode": "M2 / receding horizon",
+      "observed_pgrid_kw": 447.9081258460328,
+      "reference_pgrid_kw": 447.908125846
+    },
+    "temporal_contract_checks": {
+      "BIOGAS_BRANCH": true,
+      "COMMIT_24": true,
+      "H2_NO_SPECIAL_BRANCH": true,
+      "HELPER_CALLS": true,
+      "HELPER_DEFINITION": true,
+      "LOOKAHEAD_6": true,
+      "NON_B2_NO_COMMIT": true,
+      "NON_B2_NO_LOOKAHEAD": true,
+      "ROUTE_BINDING_MARKER": true
+    }
+  },
+  "BASELINE_2026_DUAL_ROUTE_V3_GATE": true,
+  "H2": {
+    "b2_field_contamination": {
+      "biogas_storage_nm3": false,
+      "chp_kw": false,
+      "substrate_t_day": false,
+      "substrate_t_year": false
+    },
+    "deltas": {
+      "delta_egrid_kwh": NaN,
+      "delta_grid_dependency": 0.0,
+      "delta_legacy_lcoe_usd_kwh": 0.0,
+      "delta_pgrid_kw": 0.0,
+      "grid_dependency_identity_error": NaN
+    },
+    "fixed_capacities": {
+      "bsv_kwh": 1241.0,
+      "electrolyzer_kw": 441.0,
+      "fuelcell_kw": 117.0,
+      "h2_tank_kg": 200.0,
+      "pv_kw": 990.0
+    },
+    "gates": {
+      "H2_BASELINE_NUMERICAL_GATE": true,
+      "H2_CONFIG_ROUTE_GATE": true,
+      "H2_CURRENT_PIPELINE_REGRESSION": true,
+      "H2_FIXED_CAPACITY_GATE": true,
+      "H2_GRID_DEPENDENCY_IDENTITY_GATE": true,
+      "H2_ROUTE_ISOLATION_GATE": true,
+      "H2_SCHEMA_GATE": true
+    },
+    "outputs": {
+      "P_peak_grid_opt_kw": 381.4353353071847,
+      "lcoe_legacy_usd_kwh": 0.1981557744196049,
+      "total_grid_dependency_ratio": 0.4505540026950619
+    },
+    "reference_case": "H2_eta061_comp250",
+    "route": "hydrogen"
+  },
+  "artifacts": {
+    "b2_pareto_2026_enriched_csv": {
+      "path": "results/runs/pv_bsv_biogas_b2_pareto_smoke_2026_with_biogas/pareto_latest/pareto_2026_enriched.csv",
+      "sha256": "15378a2d6245c470b6698f40e99aead0dd2cafd31d8e4809e7a8a88ecc787bdf",
+      "size_bytes": 1676
+    },
+    "b2_smoke_config_yaml": {
+      "path": "configs/paper/pv_bsv_biogas_b2_pareto_smoke_2026.yaml",
+      "sha256": "f1c05eb2818d45f8d7d933f4904a99a185450b4ec660d305b07507f5ca5d6919",
+      "size_bytes": 7451
+    },
+    "ga_nsga2_py": {
+      "path": "src/optimization/ga_nsga2.py",
+      "sha256": "06189eb7232f099293a0ba21a1c24cece07e23c61d9d34a77fa6dd7cf0fadcd3",
+      "size_bytes": 65617
+    },
+    "h2_pareto_2026_enriched_csv": {
+      "path": "results/runs/pv_bsv_h2_1500_regression_2026_with_h2/pareto_latest/pareto_2026_enriched.csv",
+      "sha256": "83a7041940bd186dad5cd9891afbd372901e2e7cdd5726579d4f7093ded558d4",
+      "size_bytes": 1611
+    },
+    "h2_regression_config_yaml": {
+      "path": "configs/paper/pv_bsv_h2_1500_regression_2026.yaml",
+      "sha256": "afcd00809dbc8b80292e4b08d9767dc9aa17971516695a08882936d38680178c",
+      "size_bytes": 3495
+    },
+    "h2_regression_summary_csv": {
+      "path": "results/validation/h2_eta_compression_regression/regression_summary.csv",
+      "sha256": "744d3e57086a343abbade3008d8902c0722bc8fd49f7049fb5cad153678f2c32",
+      "size_bytes": 1492
+    }
+  },
+  "b2_run_path": "results/runs/pv_bsv_biogas_b2_pareto_smoke_2026_with_biogas/pareto_20260906_190341",
+  "baseline_definition": "H2 corrected-2026 frozen regression AND B2 Pareto smoke with M2 commit=24h / lookahead=6h",
+  "baseline_status": "PASS",
+  "baseline_tag": "baseline-2026-dual-route-v3",
+  "h2_reference_path": "results/validation/h2_eta_compression_regression/regression_summary.csv",
+  "h2_run_path": "results/runs/pv_bsv_h2_1500_regression_2026_with_h2/pareto_20260906_185146",
+  "schema_version": "3.0",
+  "timestamp": "2026-09-06T22:10:47.912333+00:00",
+  "timestamp_timezone": "UTC"
+}
