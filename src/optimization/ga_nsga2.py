@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import copy
 import random
 import sys
@@ -63,10 +64,14 @@ class NSGA2Optimizer:
             self.config.get("system", {}).get("route", "hydrogen")
         ).strip().lower()
 
-        if self.route not in {"hydrogen", "biomethane"}:
+        if self.route not in {
+            "hydrogen",
+            "biomethane",
+            "biogas",
+        }:
             raise ValueError(
                 f"Unsupported system.route: {self.route!r}. "
-                "Expected 'hydrogen' or 'biomethane'."
+                "Expected 'hydrogen', 'biomethane' or 'biogas'."
             )
         self.df_h = df_h
 
@@ -155,7 +160,7 @@ class NSGA2Optimizer:
         self.objective_list = list(
             opt_cfg.get(
                 "objective",
-                ["lcoe_usd_kwh", "peak_grid_dependency_ratio"]
+                ["lcoe_harmonized_usd_kwh", "P_peak_grid_opt_kw"]
             )
         )
 
@@ -164,7 +169,20 @@ class NSGA2Optimizer:
                 "config['optimization']['objective'] deve conter pelo menos dois objetivos."
             )
 
+        self.first_objective_name = self.objective_list[0]
         self.second_objective_name = self.objective_list[1]
+        allowed_first_objectives = {
+            "lcoe_usd_kwh",
+            "lcoe_legacy_usd_kwh",
+            "lcoe_harmonized_usd_kwh",
+        }
+        if self.first_objective_name not in allowed_first_objectives:
+            raise ValueError(
+                "Unsupported first objective: "
+                f"{self.first_objective_name!r}. "
+                "Expected one of "
+                f"{sorted(allowed_first_objectives)}"
+            )
 
         # --------------------------------------------------
         # CACHE DE AVALIAÇÃO
@@ -177,6 +195,157 @@ class NSGA2Optimizer:
     # -----------------------------------------------------------------
     # Helpers de configuração
     # -----------------------------------------------------------------
+    def _derive_biogas_pareto_case(
+        self,
+        capacities: Dict[str, float],
+    ) -> Tuple[Dict[str, Any], Dict[str, float]]:
+        """
+        Build the physically coupled B2 Pareto case.
+        GA decision variables:
+            pv_kw
+            bsv_kwh
+            chp_kw
+        Derived variables:
+            biogas_storage_nm3
+            substrate_t_day
+            substrate_t_year
+        """
+        cfg_eval = copy.deepcopy(
+            self.config
+        )
+        cap_eval = {
+            key: float(value)
+            for key, value
+            in capacities.items()
+        }
+        if self.route != "biogas":
+            return (
+                cfg_eval,
+                cap_eval,
+            )
+        scaling = cfg_eval.get(
+            "biogas_pareto_scaling"
+        )
+        if not isinstance(
+            scaling,
+            dict,
+        ):
+            raise ValueError(
+                "Biogas Pareto route requires "
+                "config['biogas_pareto_scaling']."
+            )
+        required = (
+            "biogas_storage_nm3_per_kw_chp",
+            "substrate_t_day_per_kw_chp",
+            "validated_chp_min_kw",
+            "validated_chp_max_kw",
+        )
+        missing = [
+            key
+            for key in required
+            if key not in scaling
+        ]
+        if missing:
+            raise ValueError(
+                "Missing B2 Pareto scaling "
+                f"parameters: {missing}"
+            )
+        if "chp_kw" not in cap_eval:
+            raise ValueError(
+                "Biogas Pareto capacities "
+                "must contain chp_kw."
+            )
+        chp_kw = float(
+            cap_eval["chp_kw"]
+        )
+        chp_min = float(
+            scaling[
+                "validated_chp_min_kw"
+            ]
+        )
+        chp_max = float(
+            scaling[
+                "validated_chp_max_kw"
+            ]
+        )
+        tol = 1.0e-9
+        if (
+            chp_kw < chp_min - tol
+            or
+            chp_kw > chp_max + tol
+        ):
+            raise ValueError(
+                "B2 CHP outside validated Pareto range: "
+                f"{chp_kw} kW not in "
+                f"[{chp_min}, {chp_max}]"
+            )
+        storage_per_kw = float(
+            scaling[
+                "biogas_storage_nm3_per_kw_chp"
+            ]
+        )
+        substrate_per_kw = float(
+            scaling[
+                "substrate_t_day_per_kw_chp"
+            ]
+        )
+        days_per_year = float(
+            scaling.get(
+                "substrate_days_per_year",
+                365.0,
+            )
+        )
+        if storage_per_kw <= 0:
+            raise ValueError(
+                "biogas_storage_nm3_per_kw_chp "
+                "must be > 0"
+            )
+        if substrate_per_kw <= 0:
+            raise ValueError(
+                "substrate_t_day_per_kw_chp "
+                "must be > 0"
+            )
+        if days_per_year <= 0:
+            raise ValueError(
+                "substrate_days_per_year "
+                "must be > 0"
+            )
+        biogas_storage_nm3 = (
+            chp_kw
+            * storage_per_kw
+        )
+        substrate_t_day = (
+            chp_kw
+            * substrate_per_kw
+        )
+        substrate_t_year = (
+            substrate_t_day
+            * days_per_year
+        )
+        cap_eval[
+            "biogas_storage_nm3"
+        ] = biogas_storage_nm3
+        cap_eval[
+            "substrate_t_day"
+        ] = substrate_t_day
+        cap_eval[
+            "substrate_t_year"
+        ] = substrate_t_year
+        technology = cfg_eval.setdefault(
+            "technology",
+            {}
+        )
+        biogas_cfg = technology.setdefault(
+            "biogas",
+            {}
+        )
+        biogas_cfg[
+            "substrate_t_day"
+        ] = substrate_t_day
+        return (
+            cfg_eval,
+            cap_eval,
+        )
     def _build_bounds(self) -> Dict[str, Tuple[float, float]]:
         constraints = self.config["optimization"]["constraints"]
         bounds: Dict[str, Tuple[float, float]] = {}
@@ -223,7 +392,15 @@ class NSGA2Optimizer:
             if cap.get("fuelcell_kw", 0.0) <= 0.0:
                 cap["h2_tank_kg"] = 0.0
 
-        elif self.route == "biomethane":
+        elif self.route in (
+            "biomethane",
+            "biogas",
+        ):
+            # No additional logical repair here.
+            #
+            # For biogas Pareto, the physical coupling
+            # CHP -> gasometer -> substrate is applied later by
+            # _derive_biogas_pareto_case().
             pass
 
         return cap
@@ -340,9 +517,14 @@ class NSGA2Optimizer:
             individual.objectives, individual.metrics = self._evaluation_cache[key]
             return
 
+        eval_config, eval_capacities = (
+            self._derive_biogas_pareto_case(
+                individual.capacities
+            )
+        )
         optimizer = MILPDispatchOptimizer(
-            config=self.config,
-            capacities=individual.capacities,
+            config=eval_config,
+            capacities=eval_capacities,
             degradation_model=None,
         )
 
@@ -392,8 +574,8 @@ class NSGA2Optimizer:
         # --------------------------------------------------
 
         economics = build_economics_summary(
-            config=self.config,
-            capacities=individual.capacities,
+            config=eval_config,
+            capacities=eval_capacities,
             dispatch_df=dispatch,
         )
 
@@ -421,7 +603,30 @@ class NSGA2Optimizer:
         # EXTRAÇÃO DE VARIÁVEIS
         # --------------------------------------------------
 
-        lcoe = float(economics["lcoe_usd_kwh"])
+        lcoe_legacy = float(
+            economics["lcoe_legacy_usd_kwh"]
+        )
+        lcoe_harmonized = float(
+            economics["lcoe_harmonized_usd_kwh"]
+        )
+        annual_cost_harmonized = float(
+            economics["annual_cost_harmonized_usd"]
+        )
+        if self.first_objective_name in (
+            "lcoe_usd_kwh",
+            "lcoe_legacy_usd_kwh",
+        ):
+            lcoe = lcoe_legacy
+        elif (
+            self.first_objective_name
+            == "lcoe_harmonized_usd_kwh"
+        ):
+            lcoe = lcoe_harmonized
+        else:
+            raise ValueError(
+                "Unsupported first objective: "
+                f"{self.first_objective_name!r}"
+            )
         grid_opex = float(economics["grid_opex_annual_usd"])
         grid_peak_opex = float(economics["grid_peak_opex_annual_usd"])
 
@@ -485,12 +690,41 @@ class NSGA2Optimizer:
         # MÉTRICAS COMPLETAS (CBPE READY)
         # --------------------------------------------------
 
+        derived_route_metrics: Dict[str, Any] = {}
+        if self.route == "biogas":
+            derived_route_metrics = {
+                "biogas_storage_nm3": float(
+                    eval_capacities[
+                        "biogas_storage_nm3"
+                    ]
+                ),
+                "substrate_t_day": float(
+                    eval_capacities[
+                        "substrate_t_day"
+                    ]
+                ),
+                "substrate_t_year": float(
+                    eval_capacities[
+                        "substrate_t_year"
+                    ]
+                ),
+            }
         metrics = {
+            **derived_route_metrics,
             "milp_status": result.solver_status,
             "solve_time_sec": float(result.solve_time_sec),
 
             # ECONOMICS
-            "lcoe_usd_kwh": lcoe,
+            # ECONOMIC OBJECTIVE / TRACEABILITY
+            #
+            # lcoe_usd_kwh remains the legacy definition for
+            # backward traceability. Baseline Pareto 2026 uses
+            # lcoe_harmonized_usd_kwh as objective f1.
+            "lcoe_usd_kwh": lcoe_legacy,
+            "lcoe_legacy_usd_kwh": lcoe_legacy,
+            "lcoe_harmonized_usd_kwh": lcoe_harmonized,
+            "annual_cost_harmonized_usd":
+                annual_cost_harmonized,
             "capex_total_usd": float(economics["capex_total_usd"]),
             "annualized_capex_usd": float(economics["annualized_capex_usd"]),
             "fixed_opex_annual_usd": float(economics["fixed_opex_annual_usd"]),
@@ -757,7 +991,12 @@ class NSGA2Optimizer:
             row: Dict[str, Any] = {
                 "solution_id": i,
                 **ind.capacities,
-                "lcoe_usd_kwh": float(ind.objectives[0]),
+                "objective_1_name":
+                    self.first_objective_name,
+                "objective_2_name":
+                    self.second_objective_name,
+                self.first_objective_name:
+                    float(ind.objectives[0]),
                 "rank": ind.rank,
                 "crowding_distance": ind.crowding_distance,
             }
@@ -783,8 +1022,9 @@ class NSGA2Optimizer:
                 else:
                     second_col = "peak_grid_dependency_ratio"
 
+            first_col = self.first_objective_name
             dedup_cols = self.decision_variables + [
-                "lcoe_usd_kwh",
+                first_col,
                 second_col,
             ]
             dedup_cols = [c for c in dedup_cols if c in pareto_df.columns]
@@ -795,7 +1035,7 @@ class NSGA2Optimizer:
 
             pareto_df = pareto_df.drop_duplicates(subset=dedup_cols)
             pareto_df = (pareto_df.sort_values(
-                by=[second_col, "lcoe_usd_kwh"]
+                by=[second_col, first_col]
             ).reset_index(drop=True))
             pareto_df["solution_id"] = range(len(pareto_df))
 
@@ -826,9 +1066,14 @@ class NSGA2Optimizer:
                 # MILP (usar dados da classe, não df solto)
                 # -----------------------------------
 
+                eval_config, eval_capacities = (
+                    self._derive_biogas_pareto_case(
+                        capacities
+                    )
+                )
                 optimizer = MILPDispatchOptimizer(
-                    config=self.config,
-                    capacities=capacities,
+                    config=eval_config,
+                    capacities=eval_capacities,
                     degradation_model=None,
                 )
 
@@ -850,19 +1095,17 @@ class NSGA2Optimizer:
                 # REFERÊNCIA (consistente com resto do código)
                 # -----------------------------------
 
-                df_ref = pd.DataFrame({
-                    "hour": dispatch["hour"],
-                    "demand_kw": dispatch["demand_kw"],
-                    "p_grid_kw": dispatch["demand_kw"],
-                })
+                # Same reference definition used during
+                # individual evaluation.
+                df_ref = self._build_reference_dispatch()
 
                 # -----------------------------------
                 # ECONOMICS
                 # -----------------------------------
 
                 economics = build_economics_summary(
-                    config=self.config,
-                    capacities=capacities,
+                    config=eval_config,
+                    capacities=eval_capacities,
                     dispatch_df=dispatch,
                 )
 
@@ -873,7 +1116,7 @@ class NSGA2Optimizer:
                 peak_metrics = build_peak_metrics_summary(
                     df_dispatch_opt=dispatch,
                     df_dispatch_ref=df_ref,
-                    tariff_cfg=self.config["tariff"],
+                    tariff_cfg=eval_config["tariff"],
                     economics_opt=economics,
                     dt_hours=self.dt_hours,
                 )
@@ -896,6 +1139,29 @@ class NSGA2Optimizer:
 
                 enriched = row.to_dict()
 
+
+                if self.route == "biogas":
+                    enriched[
+                        "biogas_storage_nm3"
+                    ] = float(
+                        eval_capacities[
+                            "biogas_storage_nm3"
+                        ]
+                    )
+                    enriched[
+                        "substrate_t_day"
+                    ] = float(
+                        eval_capacities[
+                            "substrate_t_day"
+                        ]
+                    )
+                    enriched[
+                        "substrate_t_year"
+                    ] = float(
+                        eval_capacities[
+                            "substrate_t_year"
+                        ]
+                    )
                 enriched.update({
                     "P_peak_grid_ref_kw": P_ref,
                     "Peak_reduction_percent": peak_reduction,
@@ -913,6 +1179,19 @@ class NSGA2Optimizer:
                 raise RuntimeError("Nenhuma solução válida no Pareto após enriquecimento.")
 
             pareto_df = pd.DataFrame(enriched_rows)
+
+            # --------------------------------------------------
+            # PARETO 2026 ? SERVICE / FUNCTIONAL UNIT
+            # --------------------------------------------------
+            pareto_df = enrich_pareto2026_service_metrics(
+                pareto_df=pareto_df,
+                cfg=self.config,
+                route=self.route,
+                first_objective_name=
+                    self.first_objective_name,
+                second_objective_name=
+                    self.second_objective_name,
+            )
 
             # --------------------------------------------------
             # RETORNO FINAL
@@ -984,10 +1263,15 @@ def infer_run_name_from_config(
 
     route = str(route).strip().lower()
 
-    if route == "hydrogen":
+    if route in (
+        "hydrogen",
+        "h2",
+    ):
         suffix = "with_h2"
     elif route == "biomethane":
         suffix = "with_biomethane"
+    elif route == "biogas":
+        suffix = "with_biogas"
     else:
         raise ValueError(
             f"Unsupported system.route: {route!r}"
@@ -1027,23 +1311,528 @@ def build_output_dirs(
     return run_dir, latest_dir
 
 
+# ---------------------------------------------------------------------
+# Pareto 2026 ? functional unit / schema contract
+# ---------------------------------------------------------------------
+def resolve_pareto2026_service_metrics(
+    cfg: Dict[str, Any],
+) -> Dict[str, float]:
+    service_cfg = cfg.get(
+        "service",
+        {}
+    )
+    required = (
+        "fleet_size_buses",
+        "vehicle_km_per_bus_year",
+        "average_passenger_occupancy",
+    )
+    missing = [
+        key
+        for key in required
+        if key not in service_cfg
+    ]
+    if missing:
+        raise ValueError(
+            "Pareto 2026 service configuration "
+            f"missing keys: {missing}"
+        )
+    fleet_size = float(
+        service_cfg[
+            "fleet_size_buses"
+        ]
+    )
+    vehicle_km_per_bus_year = float(
+        service_cfg[
+            "vehicle_km_per_bus_year"
+        ]
+    )
+    occupancy = float(
+        service_cfg[
+            "average_passenger_occupancy"
+        ]
+    )
+    if fleet_size <= 0:
+        raise ValueError(
+            "service.fleet_size_buses must be > 0"
+        )
+    if vehicle_km_per_bus_year <= 0:
+        raise ValueError(
+            "service.vehicle_km_per_bus_year "
+            "must be > 0"
+        )
+    if occupancy <= 0:
+        raise ValueError(
+            "service.average_passenger_occupancy "
+            "must be > 0"
+        )
+    vehicle_km_annual = (
+        fleet_size
+        * vehicle_km_per_bus_year
+    )
+    passenger_km_annual = (
+        vehicle_km_annual
+        * occupancy
+    )
+    if (
+        "vehicle_km_annual"
+        in service_cfg
+    ):
+        declared = float(
+            service_cfg[
+                "vehicle_km_annual"
+            ]
+        )
+        if abs(
+            declared
+            - vehicle_km_annual
+        ) > 1.0e-9:
+            raise ValueError(
+                "UF_VKM_GATE failed: "
+                f"declared={declared}, "
+                f"derived={vehicle_km_annual}"
+            )
+    if (
+        "passenger_km_annual"
+        in service_cfg
+    ):
+        declared = float(
+            service_cfg[
+                "passenger_km_annual"
+            ]
+        )
+        if abs(
+            declared
+            - passenger_km_annual
+        ) > 1.0e-9:
+            raise ValueError(
+                "UF_PKM_GATE failed: "
+                f"declared={declared}, "
+                f"derived={passenger_km_annual}"
+            )
+    return {
+        "fleet_size_buses":
+            fleet_size,
+        "vehicle_km_per_bus_year":
+            vehicle_km_per_bus_year,
+        "average_passenger_occupancy":
+            occupancy,
+        "vehicle_km_annual":
+            vehicle_km_annual,
+        "passenger_km_annual":
+            passenger_km_annual,
+    }
+def enrich_pareto2026_service_metrics(
+    pareto_df: pd.DataFrame,
+    cfg: Dict[str, Any],
+    route: str,
+    first_objective_name: str,
+    second_objective_name: str,
+) -> pd.DataFrame:
+    if pareto_df.empty:
+        raise ValueError(
+            "Cannot enrich empty Pareto dataframe."
+        )
+    df = pareto_df.copy()
+    service = (
+        resolve_pareto2026_service_metrics(
+            cfg
+        )
+    )
+    required = (
+        "annual_cost_harmonized_usd",
+        "lcoe_harmonized_usd_kwh",
+        "E_grid_total_kwh",
+        "E_load_total_kwh",
+        "P_peak_grid_opt_kw",
+    )
+    missing = [
+        c
+        for c in required
+        if c not in df.columns
+    ]
+    if missing:
+        raise ValueError(
+            "Pareto enrichment missing "
+            f"required fields: {missing}"
+        )
+    df["route"] = str(route)
+    df[
+        "objective_1_name"
+    ] = str(
+        first_objective_name
+    )
+    df[
+        "objective_2_name"
+    ] = str(
+        second_objective_name
+    )
+    for key, value in service.items():
+        df[key] = float(value)
+    if (
+        df[
+            "E_load_total_kwh"
+        ] <= 0
+    ).any():
+        raise ValueError(
+            "E_load_total_kwh must be > 0."
+        )
+    # Canonical grid dependence.
+    df[
+        "total_grid_dependency_ratio"
+    ] = (
+        df[
+            "E_grid_total_kwh"
+        ]
+        / df[
+            "E_load_total_kwh"
+        ]
+    )
+    # Energy-system cost normalized by transport service.
+    df[
+        "energy_system_cost_usd_per_vehicle_km"
+    ] = (
+        df[
+            "annual_cost_harmonized_usd"
+        ]
+        / service[
+            "vehicle_km_annual"
+        ]
+    )
+    df[
+        "energy_system_cost_usd_per_passenger_km"
+    ] = (
+        df[
+            "annual_cost_harmonized_usd"
+        ]
+        / service[
+            "passenger_km_annual"
+        ]
+    )
+    # ---------------------------------------------
+    # Economic identity
+    # ---------------------------------------------
+    expected_lcoe = (
+        df[
+            "annual_cost_harmonized_usd"
+        ]
+        / df[
+            "E_load_total_kwh"
+        ]
+    )
+    error = (
+        expected_lcoe
+        - df[
+            "lcoe_harmonized_usd_kwh"
+        ]
+    ).abs()
+    tolerance = (
+        1.0e-10
+        + 1.0e-9
+        * df[
+            "lcoe_harmonized_usd_kwh"
+        ].abs()
+    )
+    if not bool(
+        (
+            error
+            <= tolerance
+        ).all()
+    ):
+        raise ValueError(
+            "LCOE_HARMONIZED_IDENTITY_GATE "
+            "failed."
+        )
+    return df
+def validate_pareto2026_schema(
+    pareto_df: pd.DataFrame,
+    cfg: Dict[str, Any],
+    route: str,
+) -> Dict[str, Any]:
+    if pareto_df.empty:
+        raise ValueError(
+            "PARETO_OUTPUT_SCHEMA_GATE failed: "
+            "empty dataframe."
+        )
+    route_normalized = (
+        str(route)
+        .strip()
+        .lower()
+    )
+    common_required = {
+        "solution_id",
+        "route",
+        "objective_1_name",
+        "objective_2_name",
+        "lcoe_legacy_usd_kwh",
+        "lcoe_harmonized_usd_kwh",
+        "annual_cost_harmonized_usd",
+        "P_peak_grid_opt_kw",
+        "E_grid_total_kwh",
+        "E_load_total_kwh",
+        "total_grid_dependency_ratio",
+        "fleet_size_buses",
+        "vehicle_km_per_bus_year",
+        "average_passenger_occupancy",
+        "vehicle_km_annual",
+        "passenger_km_annual",
+        "energy_system_cost_usd_per_vehicle_km",
+        "energy_system_cost_usd_per_passenger_km",
+        "pv_kw",
+        "bsv_kwh",
+    }
+    if route_normalized in (
+        "hydrogen",
+        "h2",
+    ):
+        route_family = "hydrogen"
+        route_required = {
+            "electrolyzer_kw",
+            "h2_tank_kg",
+            "fuelcell_kw",
+        }
+    elif route_normalized == "biogas":
+        route_family = "biogas"
+        route_required = {
+            "chp_kw",
+            "biogas_storage_nm3",
+        }
+    elif route_normalized == "biomethane":
+        route_family = "biomethane"
+        route_required = {
+            "chp_kw",
+            "biomethane_storage_nm3",
+        }
+    else:
+        raise ValueError(
+            "Unsupported Pareto 2026 route: "
+            f"{route!r}"
+        )
+    required = (
+        common_required
+        | route_required
+    )
+    missing = sorted(
+        required
+        - set(
+            pareto_df.columns
+        )
+    )
+    if missing:
+        raise ValueError(
+            "PARETO_OUTPUT_SCHEMA_GATE failed. "
+            f"route={route_family}; "
+            f"missing={missing}"
+        )
+    obj1 = set(
+        pareto_df[
+            "objective_1_name"
+        ].astype(str)
+    )
+    obj2 = set(
+        pareto_df[
+            "objective_2_name"
+        ].astype(str)
+    )
+    if (
+        obj1
+        != {
+            "lcoe_harmonized_usd_kwh"
+        }
+        or
+        obj2
+        != {
+            "P_peak_grid_opt_kw"
+        }
+    ):
+        raise ValueError(
+            "PARETO_OBJECTIVES_GATE failed: "
+            f"f1={sorted(obj1)}, "
+            f"f2={sorted(obj2)}"
+        )
+    service = (
+        resolve_pareto2026_service_metrics(
+            cfg
+        )
+    )
+    vkm_error = (
+        pareto_df[
+            "vehicle_km_annual"
+        ]
+        - service[
+            "vehicle_km_annual"
+        ]
+    ).abs()
+    pkm_error = (
+        pareto_df[
+            "passenger_km_annual"
+        ]
+        - service[
+            "passenger_km_annual"
+        ]
+    ).abs()
+    vkm_gate = (
+        float(
+            vkm_error.max()
+        )
+        <= 1.0e-9
+    )
+    pkm_gate = (
+        float(
+            pkm_error.max()
+        )
+        <= 1.0e-9
+    )
+    dependency_expected = (
+        pareto_df[
+            "E_grid_total_kwh"
+        ]
+        / pareto_df[
+            "E_load_total_kwh"
+        ]
+    )
+    dependency_error = (
+        dependency_expected
+        - pareto_df[
+            "total_grid_dependency_ratio"
+        ]
+    ).abs()
+    dependency_gate = (
+        float(
+            dependency_error.max()
+        )
+        <= 1.0e-12
+    )
+    if not vkm_gate:
+        raise ValueError(
+            "UF_VKM_GATE failed."
+        )
+    if not pkm_gate:
+        raise ValueError(
+            "UF_PKM_GATE failed."
+        )
+    if not dependency_gate:
+        raise ValueError(
+            "GRID_DEPENDENCY_IDENTITY_GATE "
+            "failed."
+        )
+    return {
+        "PARETO_OUTPUT_SCHEMA_GATE":
+            True,
+        "PARETO_OBJECTIVES_GATE":
+            True,
+        "UF_VKM_GATE":
+            True,
+        "UF_PKM_GATE":
+            True,
+        "GRID_DEPENDENCY_IDENTITY_GATE":
+            True,
+        "route":
+            route_family,
+        "rows":
+            int(
+                len(
+                    pareto_df
+                )
+            ),
+        "columns":
+            int(
+                len(
+                    pareto_df.columns
+                )
+            ),
+    }
+
 def save_outputs(
     pareto_df: pd.DataFrame,
     cfg: Dict[str, Any],
     run_dir: Path,
     latest_dir: Path,
+    route: str,
 ) -> None:
-    run_csv = run_dir / "pareto.csv"
-    latest_csv = latest_dir / "pareto.csv"
-
-    pareto_df.to_csv(run_csv, index=False)
-    pareto_df.to_csv(latest_csv, index=False)
-
-    if cfg.get("reproducibility", {}).get("save_config_snapshot", False):
-        snapshot_path = run_dir / "config_snapshot.yaml"
-        with open(snapshot_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
-
+    gates = validate_pareto2026_schema(
+        pareto_df=pareto_df,
+        cfg=cfg,
+        route=route,
+    )
+    print()
+    print(
+        "PARETO 2026 OUTPUT GATES"
+    )
+    for key, value in gates.items():
+        print(
+            f"  {key:38s} = {value}"
+        )
+    run_csv = (
+        run_dir
+        / "pareto.csv"
+    )
+    latest_csv = (
+        latest_dir
+        / "pareto.csv"
+    )
+    run_enriched_csv = (
+        run_dir
+        / "pareto_2026_enriched.csv"
+    )
+    latest_enriched_csv = (
+        latest_dir
+        / "pareto_2026_enriched.csv"
+    )
+    # Compatibility artifact.
+    pareto_df.to_csv(
+        run_csv,
+        index=False,
+    )
+    pareto_df.to_csv(
+        latest_csv,
+        index=False,
+    )
+    # Explicit scientific artifact.
+    pareto_df.to_csv(
+        run_enriched_csv,
+        index=False,
+    )
+    pareto_df.to_csv(
+        latest_enriched_csv,
+        index=False,
+    )
+    gate_path = (
+        run_dir
+        / "pareto_2026_schema_gates.json"
+    )
+    with gate_path.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+        json.dump(
+            gates,
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+    if (
+        cfg.get(
+            "reproducibility",
+            {}
+        ).get(
+            "save_config_snapshot",
+            False,
+        )
+    ):
+        snapshot_path = (
+            run_dir
+            / "config_snapshot.yaml"
+        )
+        with snapshot_path.open(
+            "w",
+            encoding="utf-8",
+        ) as f:
+            yaml.safe_dump(
+                cfg,
+                f,
+                sort_keys=False,
+                allow_unicode=True,
+            )
 
 def main() -> None:
     args = parse_args()
@@ -1096,14 +1885,26 @@ def main() -> None:
         config_path,
         route=optimizer.route,
     )
-    save_outputs(pareto_df, cfg, run_dir, latest_dir)
+    save_outputs(
+        pareto_df,
+        cfg,
+        run_dir,
+        latest_dir,
+        route=optimizer.route,
+    )
 
     print("\nArquivos gerados:")
     print(f"  {run_dir / 'pareto.csv'}")
     print(f"  {latest_dir / 'pareto.csv'}")
 
     print("\nResumo Pareto:")
-    preview_cols = [c for c in ["solution_id", "lcoe_usd_kwh", "P_peak_grid_opt_kw", "peak_grid_dependency_ratio"] if c in pareto_df.columns]
+    preview_cols = [c for c in [
+        "solution_id",
+        "lcoe_harmonized_usd_kwh",
+        "lcoe_legacy_usd_kwh",
+        "P_peak_grid_opt_kw",
+        "total_grid_dependency_ratio",
+    ] if c in pareto_df.columns]
     print(pareto_df[preview_cols].head())
 
     print("\n" + "=" * 72)

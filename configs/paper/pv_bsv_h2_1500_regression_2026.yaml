@@ -1,0 +1,140 @@
+project:
+  name: cbpe_xv_garagem_onibus_no_h2_controlled
+  version: 0.6.0-no-h2
+  description: 'CenÃ¡rio controlado sem H2: microrrede com PV e BESS de segunda vida'
+  timezone: America/Sao_Paulo
+reproducibility:
+  seed: 42
+  save_config_snapshot: true
+  save_input_hash: true
+  solver_name: SCIP
+  solver_time_limit_sec: 90
+  solver_mip_gap: 0.001
+data:
+  demand_profile_csv: data/processed/fleet_demand_sp.csv
+  required_columns:
+  - demand_kw
+  - pv_factor
+  - hour
+  timestep_hours: 1.0
+  horizon_hours: 8760
+tariff:
+  pricing_model: two_tier
+  used_in_milp_objective: true
+  peak_window:
+    start_hour: 18
+    end_hour: 21
+  offpeak_price_usd_kwh: 0.15
+  peak_price_usd_kwh: 0.5
+  tariff_timeseries_csv: null
+  tariff_column_name: null
+  include_demand_charge: true
+  demand_charge_usd_kw_month: 30.0
+objective:
+  peak_penalty_multiplier: 1.0
+  curtailment_penalty_usd_kwh: 0.01
+  global_peak_penalty_weight: 1.0
+economics:
+  currency_base: USD
+  analysis_horizon_years: 20
+  wacc_real: 0.08
+  include_salvage_value: false
+  salvage_fraction_default: 0.0
+  lcoe_definition:
+    includes_grid_energy_opex: true
+    includes_fixed_opex: true
+    includes_degradation_cost: false
+  capex:
+    pv_usd_per_kw: 1000.0
+    bsv_module_usd_per_kwh: 120.0
+    bsv_repurpose_usd_per_kwh: 60.0
+    bsv_integration_usd_per_kwh: 40.0
+    electrolyzer_usd_per_kw: 2000.0
+    h2_tank_usd_per_kg: 600.0
+    fuelcell_usd_per_kw: 1300.0
+  opex_fixed:
+    pv_fraction_of_capex_per_year: 0.01
+    bsv_fraction_of_capex_per_year: 0.02
+    electrolyzer_fraction_of_capex_per_year: 0.02
+    fuelcell_fraction_of_capex_per_year: 0.03
+    h2_tank_fraction_of_capex_per_year: 0.01
+  opex_variable_h2:
+    electrolyzer_usd_kwh: 0.005
+    fuelcell_usd_kwh: 0.01
+technology:
+  efficiencies:
+    electrolyzer: 0.61
+    fuelcell: 0.5
+  hydrogen:
+    lhv_kwh_per_kg: 33.33
+  h2_compression:
+    enabled: true
+    inlet_pressure_bar: 30
+    outlet_pressure_bar: 200
+    specific_energy_kwh_per_kg: 2.5
+    cooling_included: false
+  battery:
+    soc_init_fraction: 0.5
+    min_soc_fraction: 0.1
+    c_rate_max: 0.9
+    soh_initial: 0.8
+    usable_soc_window: 0.8
+    battery_roundtrip: 0.85
+  h2_storage:
+    soc_init_fraction: 0.5
+degradation:
+  enabled: true
+  model: DegradationCostManager
+  cost_unit: usd_per_kwh_throughput_proxy
+  default_dod_for_cost: 0.5
+  default_temp_c_if_missing: 25.0
+  include_in_objective: true
+  report_separately: true
+optimization:
+  objective:
+  - lcoe_harmonized_usd_kwh
+  - P_peak_grid_opt_kw
+  pareto_period_hours: 24
+  single_case_period_hours: 24
+  total_grid_dependency_weight: 0.15
+  constraints:
+    pv_kw:
+      min: 990.0
+      max: 990.0
+    bsv_kwh:
+      min: 1241.0
+      max: 1241.0
+    electrolyzer_kw:
+      min: 441.0
+      max: 441.0
+    h2_tank_kg:
+      min: 200.0
+      max: 200.0
+    fuelcell_kw:
+      min: 117.0
+      max: 117.0
+  grid_power_max_kw: 5000.0
+selection:
+  mode: min_lcoe
+ga:
+  algorithm: NSGA-II
+  population: 2
+  generations: 1
+  crossover_prob: 0.9
+  mutation_prob: 0.1
+  tournament_size: 2
+  integer_variables: true
+  decision_variables:
+  - pv_kw
+  - bsv_kwh
+  - electrolyzer_kw
+  - h2_tank_kg
+  - fuelcell_kw
+service:
+  fleet_size_buses: 50
+  vehicle_km_per_bus_year: 66540.0
+  average_passenger_occupancy: 23.0
+  vehicle_km_annual: 3327000.0
+  passenger_km_annual: 76521000.0
+system:
+  route: hydrogen

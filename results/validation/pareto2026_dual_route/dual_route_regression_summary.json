@@ -1,0 +1,71 @@
+{
+  "B2": {
+    "gates": {
+      "B2_END_TO_END_SMOKE_GATE": true,
+      "B2_HARMONIZED_ECONOMICS_GATE": true,
+      "B2_OBJECTIVE_GATE": true,
+      "B2_PHYSICAL_COUPLING_GATE": true,
+      "B2_ROUTE_GATE": true,
+      "B2_SCHEMA_CONTRACT_GATE": true,
+      "B2_SERVICE_GATE": true
+    },
+    "residuals": {
+      "grid_dependency_max_error": 1.1102230246251565e-16,
+      "harmonized_lcoe_max_error_usd_kwh": 0.0,
+      "storage_max_error_nm3": 2.842170943040401e-14,
+      "substrate_max_error_t_day": 0.0
+    }
+  },
+  "BASELINE_2026_DUAL_ROUTE_GATE": true,
+  "H2": {
+    "b2_field_contamination": {
+      "biogas_storage_nm3": false,
+      "chp_kw": false,
+      "substrate_t_day": false,
+      "substrate_t_year": false
+    },
+    "deltas": {
+      "delta_egrid_kwh": 0.0,
+      "delta_grid_dependency": 0.0,
+      "delta_legacy_lcoe_usd_kwh": 0.0,
+      "delta_pgrid_kw": 0.0,
+      "harmonized_lcoe_identity_error_usd_kwh": -5.551115123125783e-17,
+      "passenger_km_cost_identity_error": -6.938893903907228e-17,
+      "vehicle_km_cost_identity_error": -8.326672684688674e-17
+    },
+    "gates": {
+      "H2_BASELINE_NUMERICAL_GATE": true,
+      "H2_CURRENT_PIPELINE_REGRESSION": true,
+      "H2_FIXED_CAPACITY_GATE": true,
+      "H2_HARMONIZED_IDENTITIES_GATE": true,
+      "H2_ROUTE_ISOLATION_GATE": true,
+      "H2_SCHEMA_GATE": true
+    },
+    "reference_case": "H2_eta061_comp250"
+  },
+  "artifacts": {
+    "b2_pareto_2026_enriched_csv": {
+      "path": "results/runs/pv_bsv_biogas_b2_pareto_smoke_2026_with_biogas/pareto_latest/pareto_2026_enriched.csv",
+      "sha256": "14cbf1a231532aee5c9192c07933d44ed55eeebd3b01b751ae6400a37218c28b",
+      "size_bytes": 1676
+    },
+    "h2_pareto_2026_enriched_csv": {
+      "path": "results/runs/pv_bsv_h2_1500_regression_2026_with_h2/pareto_latest/pareto_2026_enriched.csv",
+      "sha256": "9b829890acb79e623cad3d0e7245f3cf36b7775635b19c282143f4f7f009e60e",
+      "size_bytes": 1612
+    },
+    "h2_regression_summary_csv": {
+      "path": "results/validation/h2_eta_compression_regression/regression_summary.csv",
+      "sha256": "744d3e57086a343abbade3008d8902c0722bc8fd49f7049fb5cad153678f2c32",
+      "size_bytes": 1492
+    }
+  },
+  "b2_run_path": "results/runs/pv_bsv_biogas_b2_pareto_smoke_2026_with_biogas/pareto_20260905_215635",
+  "baseline_definition": "B2 end-to-end smoke AND H2 corrected-2026 current-pipeline regression",
+  "baseline_status": "PASS",
+  "h2_reference_path": "results/validation/h2_eta_compression_regression/regression_summary.csv",
+  "h2_run_path": "results/runs/pv_bsv_h2_1500_regression_2026_with_h2/pareto_20260905_220807",
+  "schema_version": "1.0",
+  "timestamp": "2026-09-06T01:21:53+00:00",
+  "timestamp_timezone": "UTC"
+}
